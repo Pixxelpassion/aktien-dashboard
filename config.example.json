@@ -1,0 +1,10 @@
+{
+  "_help": "Kopiere diese Datei nach config.json und trage deine Werte ein.",
+  "discord_webhook_url": "https://discord.com/api/webhooks/DEINE_ID/DEIN_TOKEN",
+  "parqet_access_token": "",
+  "parqet_refresh_token": "",
+  "parqet_token_expires_at": 0,
+  "server_port": 5000,
+  "sync_hour": 20,
+  "sync_minute": 0
+}

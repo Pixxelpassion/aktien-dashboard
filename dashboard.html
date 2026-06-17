@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parqet Portfolio Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --pp-green:#b7cb3a;--pp-green-dark:#717e21;--pp-ink:#1A202C;--pp-teal:#09adbe;--pp-orange:#f76a0c;
+  --pp-muted:#6b7280;--pp-bg:#fbfbfb;--pp-bg2:#f3f3f3;--pp-card:#ffffff;--pp-border:#e6e8e1;--pp-neg:#b82105;
+
+  --bg:var(--pp-bg);--card:var(--pp-card);--border:var(--pp-border);--text:var(--pp-ink);--muted:var(--pp-muted);
+  --accent:var(--pp-green);--accent-light:#ede9fe;--green:var(--pp-teal);--green-bg:#dcfce7;
+  --red:var(--pp-neg);--red-bg:#fee2e2;--amber:var(--pp-orange);--amber-bg:#fef3c7;
+  --header-bg:var(--pp-ink);--header-text:#f8fafc;
+  --shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,.08),0 2px 4px -1px rgba(0,0,0,.04);
+  --radius:12px;--body-font:'Poppins','Segoe UI',system-ui,sans-serif;--head-font:'Montserrat','Poppins','Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--body-font);background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+
+/* Header */
+.header{background:var(--header-bg);color:var(--header-text);padding:.9rem 1.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.header-brand{font-size:1.1rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.5rem}
+.header-brand span{font-size:1.3rem}
+.header-spacer{flex:1}
+.header-meta{font-size:.78rem;color:#94a3b8;white-space:nowrap}
+.header-actions{display:flex;gap:.6rem;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;border-radius:8px;border:none;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .15s;font-family:var(--font)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#4338ca}
+.btn-ghost{background:rgba(255,255,255,.08);color:#e2e8f0;border:1px solid rgba(255,255,255,.15)}
+.btn-ghost:hover{background:rgba(255,255,255,.15)}
+.btn-sm{padding:.3rem .65rem;font-size:.76rem}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#b91c1c}
+.btn-outline{background:transparent;color:var(--accent);border:1.5px solid var(--accent)}
+.btn-outline:hover{background:var(--accent-light)}
+
+/* Setup banner */
+.setup-banner{background:linear-gradient(135deg,#312e81,#4f46e5);color:#fff;padding:1.25rem 1.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.setup-banner p{flex:1;font-size:.92rem;opacity:.9}
+.setup-banner strong{font-size:1rem}
+
+/* Sync indicator */
+.sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:.35rem}
+.sync-dot.ok{background:#22c55e}
+.sync-dot.warn{background:#f59e0b;animation:pulse 1.5s infinite}
+.sync-dot.error{background:#ef4444}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Main layout */
+main{padding:1.5rem 1.75rem 3rem;max-width:1600px;margin:0 auto}
+
+/* Cards row */
+.cards-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.25rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.25rem;box-shadow:var(--shadow)}
+.card-label{font-size:.73rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:.4rem}
+.card-value{font-size:1.65rem;font-weight:800;line-height:1;letter-spacing:-.5px}
+.card-sub{font-size:.78rem;color:var(--muted);margin-top:.35rem}
+.card-accent{border-left:4px solid var(--accent)}
+.card-green{border-left:4px solid var(--green)}
+.card-red{border-left:4px solid var(--red)}
+.card-amber{border-left:4px solid var(--amber)}
+.pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--muted)}
+
+/* Charts row */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem}
+@media(max-width:900px){.charts-row{grid-template-columns:1fr}}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.25rem;box-shadow:var(--shadow)}
+.chart-card h3{font-size:.85rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.9rem}
+.chart-wrap{position:relative;height:260px}
+
+/* Table section */
+.table-section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.table-toolbar{display:flex;align-items:center;gap:.75rem;padding:1rem 1.25rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.table-toolbar h2{font-size:1rem;font-weight:700;margin-right:.5rem}
+.search-box{display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.35rem .7rem;gap:.4rem;flex:1;max-width:260px}
+.search-box input{border:none;background:transparent;font-family:var(--font);font-size:.84rem;color:var(--text);outline:none;width:100%}
+.filter-select{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.38rem .65rem;font-size:.82rem;font-family:var(--font);color:var(--text);cursor:pointer}
+.table-spacer{flex:1}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+thead th{padding:.65rem .85rem;text-align:left;font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;background:var(--bg);position:sticky;top:0}
+tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+tbody tr:hover{background:#f8fafc}
+tbody tr:last-child{border-bottom:none}
+td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
+.ticker-badge{display:inline-block;background:var(--accent-light);color:var(--accent);font-weight:700;font-size:.72rem;padding:.15rem .4rem;border-radius:5px;margin-left:.4rem}
+.name-cell{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.val-pos{color:var(--green);font-weight:600}
+.val-neg{color:var(--red);font-weight:600}
+
+/* Type badges */
+.badge{display:inline-block;padding:.18rem .55rem;border-radius:20px;font-size:.71rem;font-weight:700;white-space:nowrap}
+.badge-growth{background:#ede9fe;color:#6d28d9}
+.badge-dividend{background:#dcfce7;color:#15803d}
+.badge-cashflow{background:#fff7ed;color:#c2410c}
+.badge-empty{background:var(--bg);color:var(--muted);border:1px dashed var(--border)}
+
+/* Position size pills */
+.position-pill{display:inline-block;padding:.35rem 1rem;border-radius:20px;font-size:.75rem;font-weight:700;text-align:center;min-width:70px}
+.position-25{background:#f0f5dc;color:#6b7e21}
+.position-50{background:#d4e8a8;color:#4a5e1f}
+.position-75{background:#a8d368;color:#374a17}
+.position-100{background:#8ec44e;color:#374a17}
+
+/* Drawdown bar */
+.dd-bar-wrap{display:flex;align-items:center;gap:.5rem;min-width:120px}
+.dd-bar-track{flex:1;height:6px;background:#f1f5f9;border-radius:3px;overflow:visible;position:relative;min-width:60px}
+.dd-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.dd-avg-line{position:absolute;top:-3px;bottom:-3px;width:2px;background:#94a3b8;border-radius:1px}
+.dd-val{font-size:.78rem;font-weight:600;min-width:42px;text-align:right}
+
+/* Edit panel (slide-over) */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;opacity:0;pointer-events:none;transition:opacity .2s}
+.overlay.open{opacity:1;pointer-events:all}
+.edit-panel{position:fixed;top:0;right:-440px;bottom:0;width:420px;max-width:95vw;background:var(--card);z-index:201;box-shadow:-4px 0 24px rgba(0,0,0,.12);transition:right .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;display:flex;flex-direction:column}
+.edit-panel.open{right:0}
+.panel-header{padding:1.2rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.75rem}
+.panel-header .close-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:.25rem}
+.panel-header .close-btn:hover{color:var(--text)}
+.panel-body{padding:1.25rem 1.4rem;flex:1;display:flex;flex-direction:column;gap:1.1rem}
+.panel-footer{padding:1rem 1.4rem;border-top:1px solid var(--border);display:flex;gap:.75rem}
+.panel-info{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;background:var(--bg);border-radius:10px;padding:.85rem 1rem;margin-bottom:.25rem}
+.panel-info-item{}
+.panel-info-label{font-size:.69rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.panel-info-val{font-size:.9rem;font-weight:700;margin-top:.1rem}
+.form-group{display:flex;flex-direction:column;gap:.35rem}
+.form-group label{font-size:.78rem;font-weight:600;color:var(--muted)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.form-input,.form-select{width:100%;padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:8px;font-size:.87rem;font-family:var(--font);color:var(--text);background:var(--card);outline:none;transition:border-color .15s}
+.form-input:focus,.form-select:focus{border-color:var(--accent)}
+.form-input[type=number]{font-variant-numeric:tabular-nums}
+.target-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+
+/* Settings modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-bg.open{opacity:1;pointer-events:all}
+.modal{background:var(--card);border-radius:var(--radius);width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md);transform:scale(.97);transition:transform .2s}
+.modal-bg.open .modal{transform:scale(1)}
+.modal-header{padding:1.2rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;font-weight:700;font-size:1rem}
+.modal-header .close-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:.25rem}
+.modal-body{padding:1.25rem 1.4rem;display:flex;flex-direction:column;gap:1rem}
+.modal-footer{padding:1rem 1.4rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:.75rem}
+.divider{border:none;border-top:1px solid var(--border);margin:.25rem 0}
+
+/* Alarms sidebar toggle */
+.alarm-badge{background:var(--red);color:#fff;font-size:.68rem;font-weight:700;padding:.1rem .38rem;border-radius:20px;margin-left:.35rem}
+
+/* Toast */
+#toasts{position:fixed;bottom:1.5rem;right:1.5rem;z-index:400;display:flex;flex-direction:column;gap:.5rem}
+.toast{background:var(--header-bg);color:#fff;padding:.75rem 1.1rem;border-radius:10px;font-size:.83rem;box-shadow:var(--shadow-md);animation:slide-in .25s ease;display:flex;align-items:center;gap:.5rem;min-width:220px}
+.toast.success{border-left:3px solid #22c55e}
+.toast.error{border-left:3px solid var(--red)}
+.toast.info{border-left:3px solid var(--accent)}
+@keyframes slide-in{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* Alarms table in modal */
+.alarm-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border);font-size:.82rem}
+.alarm-row:last-child{border-bottom:none}
+.alarm-type-buy{color:var(--green);font-weight:700}
+.alarm-type-sell{color:var(--red);font-weight:700}
+
+/* Tabs */
+.tab-btn{
+  background:transparent;border:none;padding:.7rem 1rem;font-size:.85rem;font-weight:600;
+  color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;
+  transition:all .2s;font-family:var(--font)
+}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Sorting */
+.sort-indicator{
+  display:inline-block;font-size:.65rem;margin-left:.25rem;color:var(--accent);font-weight:900
+}
+.sort-indicator:empty::after{content:'·'}
+th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
+
+/* Empty state */
+.empty-state{padding:3rem;text-align:center;color:var(--muted)}
+.empty-state .icon{font-size:2.5rem;margin-bottom:.75rem}
+.empty-state p{font-size:.9rem}
+
+/* Responsive */
+@media(max-width:700px){
+  .header{padding:.7rem 1rem}
+  main{padding:1rem}
+  .cards-row{grid-template-columns:1fr 1fr}
+}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-brand"><span>📈</span> Parqet Dashboard</div>
+  <div class="header-spacer"></div>
+  <div class="header-meta" id="sync-meta">
+    <span class="sync-dot warn" id="sync-dot"></span>
+    <span id="sync-label">Wird geladen…</span>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost btn-sm" id="alarms-btn" onclick="openAlarms()">
+      Alarme <span id="alarm-count-badge" class="alarm-badge hidden">0</span>
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="triggerSync()" id="sync-btn">↻ Sync</button>
+    <button class="btn btn-ghost btn-sm" onclick="openSettings()">⚙ Einstellungen</button>
+    <a href="/oauth/start" class="btn btn-primary btn-sm" id="connect-btn">Parqet verbinden</a>
+  </div>
+</header>
+
+<!-- Setup Banner (shown when not connected) -->
+<div class="setup-banner" id="setup-banner" style="display:none">
+  <div>
+    <strong>Parqet noch nicht verbunden</strong>
+    <p>Klicke auf "Parqet verbinden" oben rechts, um dein Portfolio zu laden.</p>
+  </div>
+  <a href="/oauth/start" class="btn btn-primary">Jetzt verbinden →</a>
+</div>
+
+<main>
+  <!-- Currency Toggle -->
+  <div style="display:flex;justify-content:flex-end;gap:1rem;margin-bottom:1.25rem;align-items:center">
+    <button class="btn btn-outline btn-sm" id="currency-toggle" onclick="toggleCurrency()">
+      💱 Anzeige: <span id="currency-label">EUR</span>
+    </button>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="cards-row">
+    <div class="card card-accent">
+      <div class="card-label">Gesamtwert</div>
+      <div class="card-value" id="total-value">—</div>
+      <div class="card-sub" id="total-cost">Einstandswert: —</div>
+    </div>
+    <div class="card card-green">
+      <div class="card-label">Gesamtrendite</div>
+      <div class="card-value" id="total-return">—</div>
+      <div class="card-sub" id="total-return-abs">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Positionen</div>
+      <div class="card-value" id="positions-count">—</div>
+      <div class="card-sub" id="annotated-count">— annotiert</div>
+    </div>
+    <div class="card card-amber">
+      <div class="card-label">Alarme heute</div>
+      <div class="card-value" id="alarms-today">—</div>
+      <div class="card-sub">Kauf- / Verkaufmarken</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>Drawdown-Vergleich (Aktuell vs. Ø)</h3>
+      <div class="chart-wrap"><canvas id="ddChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Sektorverteilung</h3>
+      <div class="chart-wrap"><canvas id="sectorChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Portfolio Tabs -->
+  <div style="display:flex;gap:.5rem;margin-bottom:1rem;border-bottom:2px solid var(--border);flex-wrap:wrap">
+    <button class="tab-btn active" data-portfolio="all" onclick="switchPortfolio('all')">
+      📊 Alle Portfolios
+    </button>
+    <div id="portfolio-tabs"></div>
+  </div>
+
+  <!-- Holdings Table -->
+  <div class="table-section">
+    <div class="table-toolbar">
+      <h2>Portfolio</h2>
+      <div class="search-box">
+        <span style="color:var(--muted)">🔍</span>
+        <input type="text" id="search-input" placeholder="Suchen…" oninput="filterTable()">
+      </div>
+      <select class="filter-select" id="sector-filter" onchange="filterTable()">
+        <option value="">Alle Sektoren</option>
+        <option>Informationstechnologie</option>
+        <option>Nichtbasiskonsum</option>
+        <option>Gesundheit</option>
+        <option>Industrie</option>
+        <option>Basiskonsum</option>
+        <option>Finanzen</option>
+        <option>Grundstoffe</option>
+        <option>Versorgung</option>
+        <option>Immobilien</option>
+        <option>Kommunikation</option>
+        <option>Energie</option>
+      </select>
+      <select class="filter-select" id="type-filter" onchange="filterTable()">
+        <option value="">Alle Typen</option>
+        <option value="growth">Wachstum</option>
+        <option value="dividend">Dividende</option>
+        <option value="cashflow">Cashflow</option>
+      </select>
+      <div class="table-spacer"></div>
+      <span style="font-size:.76rem;color:var(--muted)">Klick auf Zeile zum Bearbeiten</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="cursor:pointer;text-align:center" onclick="sort('position_size')">
+              Position <span id="sort-indicator-position_size" class="sort-indicator"></span>
+            </th>
+            <th style="cursor:pointer" onclick="sort('name')">
+              Name <span id="sort-indicator-name" class="sort-indicator"></span>
+            </th>
+            <th style="text-align:right;cursor:pointer" onclick="sort('purchase_price')">
+              Einstand <span id="sort-indicator-purchase_price" class="sort-indicator"></span>
+            </th>
+            <th style="text-align:right;cursor:pointer" onclick="sort('current_price')">
+              Kurs <span id="sort-indicator-current_price" class="sort-indicator"></span>
+            </th>
+            <th style="text-align:right;cursor:pointer" onclick="sort('current_value')">
+              Wert <span id="sort-indicator-current_value" class="sort-indicator"></span>
+            </th>
+            <th style="text-align:right;cursor:pointer" onclick="sort('total_return_pct')">
+              +/- % <span id="sort-indicator-total_return_pct" class="sort-indicator"></span>
+            </th>
+            <th style="cursor:pointer" onclick="sort('stock_type')">
+              Typ <span id="sort-indicator-stock_type" class="sort-indicator"></span>
+            </th>
+            <th style="cursor:pointer" onclick="sort('sector')">
+              Sektor <span id="sort-indicator-sector" class="sort-indicator"></span>
+            </th>
+            <th style="cursor:pointer" onclick="sort('country')">
+              Land <span id="sort-indicator-country" class="sort-indicator"></span>
+            </th>
+            <th style="text-align:right;cursor:pointer" onclick="sort('buy_target')">
+              Kaufm. <span id="sort-indicator-buy_target" class="sort-indicator"></span>
+            </th>
+            <th style="text-align:right;cursor:pointer" onclick="sort('sell_target')">
+              Verkm. <span id="sort-indicator-sell_target" class="sort-indicator"></span>
+            </th>
+            <th style="cursor:pointer" onclick="sort('current_drawdown_pct')">
+              DD vs. Typ <span id="sort-indicator-current_drawdown_pct" class="sort-indicator"></span>
+            </th>
+            <th style="text-align:right;cursor:pointer" onclick="sort('return_15y_cagr')">
+              15J p.a. <span id="sort-indicator-return_15y_cagr" class="sort-indicator"></span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="holdings-tbody">
+          <tr><td colspan="15"><div class="empty-state"><div class="icon">⏳</div><p>Daten werden geladen…</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- Overlay -->
+<div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+<!-- Edit Panel -->
+<div class="edit-panel" id="edit-panel">
+  <div class="panel-header">
+    <div>
+      <div style="font-weight:800;font-size:1.05rem" id="panel-name">—</div>
+      <div style="font-size:.78rem;color:var(--muted)" id="panel-ticker-isin">—</div>
+    </div>
+    <button class="close-btn" onclick="closeEditPanel()">✕</button>
+  </div>
+  <div class="panel-body">
+    <div class="panel-info" id="panel-info"></div>
+
+    <div class="form-group">
+      <label>Aktientyp</label>
+      <select class="form-select" id="edit-type">
+        <option value="">— nicht vergeben —</option>
+        <option value="growth">📈 Wachstum</option>
+        <option value="dividend">💰 Dividende</option>
+        <option value="cashflow">🔄 Cashflow</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>GICS-Sektor</label>
+      <select class="form-select" id="edit-sector">
+        <option value="">— nicht vergeben —</option>
+        <option>Informationstechnologie</option>
+        <option>Nichtbasiskonsum</option>
+        <option>Gesundheit</option>
+        <option>Industrie</option>
+        <option>Basiskonsum</option>
+        <option>Finanzen</option>
+        <option>Grundstoffe</option>
+        <option>Versorgung</option>
+        <option>Immobilien</option>
+        <option>Kommunikation</option>
+        <option>Energie</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Land</label>
+      <select class="form-select" id="edit-country">
+        <option value="">— nicht vergeben —</option>
+        <option>Deutschland</option>
+        <option>USA</option>
+        <option>Vereinigtes Königreich</option>
+        <option>Schweiz</option>
+        <option>Niederlande</option>
+        <option>Frankreich</option>
+        <option>Schweden</option>
+        <option>Dänemark</option>
+        <option>Norwegen</option>
+        <option>Japan</option>
+        <option>China</option>
+        <option>Südkorea</option>
+        <option>Kanada</option>
+        <option>Australien</option>
+        <option>Spanien</option>
+        <option>Italien</option>
+        <option>Österreich</option>
+        <option>Belgien</option>
+        <option>Irland</option>
+        <option>Luxemburg</option>
+        <option>Sonstiges</option>
+      </select>
+    </div>
+
+    <hr class="divider">
+
+    <div class="target-row">
+      <div class="form-group">
+        <label>Kaufmarke (≤ → Alarm)</label>
+        <input class="form-input" type="number" id="edit-buy" step="0.01" placeholder="z.B. 145.00">
+      </div>
+      <div class="form-group">
+        <label>Verkaufmarke (≥ → Alarm)</label>
+        <input class="form-input" type="number" id="edit-sell" step="0.01" placeholder="z.B. 210.00">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Notizen</label>
+      <input class="form-input" type="text" id="edit-notes" placeholder="Eigene Anmerkungen…">
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0">
+    <div class="form-group">
+      <label>📍 Börsenplatz / Währung</label>
+      <span id="currency-auto" style="font-size:.73rem;color:var(--muted);display:block;margin-bottom:.5rem">Automatisch erkannt: —</span>
+      <select class="form-select" id="edit-currency">
+        <option value="">— Automatisch (ISIN-Prefix) —</option>
+        <option value="USD">USD (US, Bermuda, etc.)</option>
+        <option value="EUR">EUR (Deutschland, Frankreich, etc.)</option>
+        <option value="GBP">GBP (Großbritannien)</option>
+        <option value="SEK">SEK (Schweden)</option>
+        <option value="DKK">DKK (Dänemark)</option>
+        <option value="CHF">CHF (Schweiz)</option>
+        <option value="JPY">JPY (Japan)</option>
+        <option value="HKD">HKD (Hong Kong)</option>
+        <option value="SGD">SGD (Singapur)</option>
+        <option value="CAD">CAD (Kanada)</option>
+        <option value="AUD">AUD (Australien)</option>
+        <option value="KRW">KRW (Südkorea)</option>
+        <option value="CNY">CNY (China)</option>
+        <option value="INR">INR (Indien)</option>
+        <option value="BRL">BRL (Brasilien)</option>
+      </select>
+      <span style="font-size:.73rem;color:var(--muted)">Überschreibt Automatik wenn nötig (z.B. Samsung GDR → KRW).</span>
+    </div>
+    <div class="form-group">
+      <label>Positionsgröße</label>
+      <select class="form-select" id="edit-position-size">
+        <option value="">— Nicht gesetzt —</option>
+        <option value="25%">25% (Klein)</option>
+        <option value="50%">50% (Mittel)</option>
+        <option value="75%">75% (Groß)</option>
+        <option value="100%">100% (Vollposition)</option>
+      </select>
+      <span style="font-size:.73rem;color:var(--muted)">Klassifizierung der Positionsgröße im Portfolio.</span>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0">
+    <div class="form-group">
+      <label>📊 Typischer Drawdown %</label>
+      <input class="form-input" type="number" id="edit-typical-dd" step="0.1" min="0" placeholder="z.B. 12.5" style="font-size:.82rem">
+      <span style="font-size:.73rem;color:var(--muted)">Durchschnittlicher Drawdown im aktuellen Aufwärtstrend (zu Vergleich mit aktuellem DD).</span>
+    </div>
+  </div>
+  <div class="panel-footer">
+    <button class="btn btn-outline" onclick="clearAnnotation()">Zurücksetzen</button>
+    <div style="flex:1"></div>
+    <button class="btn btn-primary" onclick="saveAnnotation()">Speichern</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-bg" id="settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      ⚙ Einstellungen
+      <button class="close-btn" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Discord Webhook URL</label>
+        <input class="form-input" type="url" id="cfg-discord" placeholder="https://discord.com/api/webhooks/…">
+        <span style="font-size:.73rem;color:var(--muted)">Wird für Kauf-/Verkaufsalarme verwendet.</span>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="testDiscord()">Webhook testen</button>
+      <hr class="divider">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Auto-Sync Stunde (0–23)</label>
+          <input class="form-input" type="number" id="cfg-hour" min="0" max="23" value="20">
+        </div>
+        <div class="form-group">
+          <label>Minute (0–59)</label>
+          <input class="form-input" type="number" id="cfg-minute" min="0" max="59" value="0">
+        </div>
+      </div>
+      <span style="font-size:.73rem;color:var(--muted)">Server muss laufen für automatischen Sync.</span>
+      <hr class="divider">
+      <div class="form-group">
+        <label>Parqet-Verbindung</label>
+        <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+          <span id="connection-status-text" style="font-size:.85rem;color:var(--muted)">—</span>
+          <button class="btn btn-outline btn-sm" onclick="testParqet()">Verbindung testen</button>
+          <a href="/oauth/start" class="btn btn-outline btn-sm">Neu verbinden</a>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeSettings()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Alarms Modal -->
+<div class="modal-bg" id="alarms-modal">
+  <div class="modal">
+    <div class="modal-header">
+      🔔 Alarm-Protokoll
+      <button class="close-btn" onclick="closeAlarms()">✕</button>
+    </div>
+    <div class="modal-body" id="alarms-list" style="max-height:400px;overflow-y:auto">
+      <p style="color:var(--muted);font-size:.85rem">Lädt…</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeAlarms()">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toasts"></div>
+
+<script>
+// =============================================================================
+// STATE
+// =============================================================================
+let allHoldings = [];
+let summary = {};
+let editTicker = null;
+let ddChart = null;
+let sectorChart = null;
+let currentPortfolio = "all";
+let sortBy = "current_value";
+let sortOrder = "desc";
+let showOriginalCurrency = false;
+let exchangeRates = {};
+
+// Currency mapping: ISIN-Prefix → Währung (Rate wird vom Server geladen)
+const currencyMap = {
+  'US': 'USD',   'DK': 'DKK',   'DE': 'EUR',   'FR': 'EUR',   'NL': 'EUR',
+  'GB': 'GBP',   'SE': 'SEK',   'CH': 'CHF',   'JP': 'JPY',   'HK': 'HKD',
+  'SG': 'SGD',   'CA': 'CAD',   'AU': 'AUD',   'KY': 'USD',   'IE': 'EUR',
+  'BM': 'USD',   'CN': 'CNY',   'KR': 'KRW',   'BR': 'BRL',   'IN': 'INR',
+  'default': 'USD'
+};
+
+async function loadExchangeRates() {
+  try {
+    exchangeRates = await fetch('/api/exchange-rates').then(r => r.json());
+    console.log('Exchange rates loaded:', exchangeRates);
+  } catch(e) {
+    console.error('Fehler beim Laden der Wechselkurse:', e);
+  }
+}
+
+function getCurrency(isin, currencyOverride) {
+  // Check per-position override first (from annotations)
+  if (currencyOverride) {
+    return currencyOverride.toUpperCase();
+  }
+  // Fall back to ISIN-Prefix mapping
+  if (!isin || isin.length < 2) return currencyMap.default;
+  const prefix = isin.substring(0, 2).toUpperCase();
+  return currencyMap[prefix] || currencyMap.default;
+}
+
+function getExchangeRate(isin, currencyOverride) {
+  const currency = getCurrency(isin, currencyOverride);
+  return exchangeRates[currency] || 1.0;
+}
+
+// =============================================================================
+// UTILS
+// =============================================================================
+const fmt = (v, d=2) => v == null ? '—' : Number(v).toLocaleString('de-DE', {minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtEur = (v) => v == null ? '—' : '€ ' + fmt(v);
+const fmtPct = (v) => v == null ? '—' : (v>=0?'+':'') + fmt(v) + ' %';
+const colorPct = (v) => v == null ? 'neu' : v>0?'val-pos':'val-neg';
+
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = {info:'ℹ️', success:'✅', error:'❌'};
+  el.innerHTML = `<span>${icons[type]||'•'}</span><span>${msg}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// =============================================================================
+// DATA LOADING
+// =============================================================================
+async function loadStatus() {
+  try {
+    const s = await fetch('/api/status').then(r=>r.json());
+    const dot = document.getElementById('sync-dot');
+    const label = document.getElementById('sync-label');
+    const connectBtn = document.getElementById('connect-btn');
+    const setupBanner = document.getElementById('setup-banner');
+    const connText = document.getElementById('connection-status-text');
+
+    if (!s.connected) {
+      dot.className = 'sync-dot error';
+      label.textContent = 'Nicht verbunden';
+      setupBanner.style.display = '';
+      connectBtn.style.display = '';
+      connText.textContent = '✗ Nicht verbunden';
+    } else if (!s.token_valid) {
+      dot.className = 'sync-dot warn';
+      label.textContent = 'Token abgelaufen';
+      connectBtn.style.display = '';
+      connText.textContent = '⚠ Token abgelaufen';
+    } else {
+      setupBanner.style.display = 'none';
+      connectBtn.style.display = 'none';
+      connText.textContent = '✓ Verbunden';
+      if (s.last_sync) {
+        const d = new Date(s.last_sync.replace(' ','T')+'Z');
+        dot.className = 'sync-dot ok';
+        label.textContent = 'Sync: ' + d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      } else {
+        dot.className = 'sync-dot warn';
+        label.textContent = 'Noch kein Sync';
+      }
+    }
+
+    // Alarms
+    const alarmBadge = document.getElementById('alarm-count-badge');
+    const alarmsToday = s.alarms_today || 0;
+    document.getElementById('alarms-today').textContent = alarmsToday;
+    document.getElementById('alarms-today').className = 'card-value ' + (alarmsToday > 0 ? 'neg' : 'neu');
+    if (alarmsToday > 0) {
+      alarmBadge.textContent = alarmsToday;
+      alarmBadge.classList.remove('hidden');
+    } else {
+      alarmBadge.classList.add('hidden');
+    }
+  } catch(e) {
+    console.error('Status-Fehler:', e);
+  }
+}
+
+async function loadPortfolio() {
+  try {
+    await loadExchangeRates();
+    const data = await fetch('/api/portfolio').then(r=>r.json());
+    allHoldings = data.holdings || [];
+    summary = data.summary || {};
+    buildPortfolioTabs();
+    currentPortfolio = 'all';
+    document.querySelector('[data-portfolio="all"]').classList.add('active');
+    renderSummary();
+    renderTable();
+    renderCharts();
+  } catch(e) {
+    console.error('Portfolio-Fehler:', e);
+    document.getElementById('holdings-tbody').innerHTML =
+      '<tr><td colspan="15"><div class="empty-state"><div class="icon">⚠️</div><p>Fehler beim Laden. Server läuft?</p></div></td></tr>';
+  }
+}
+
+// =============================================================================
+// CURRENCY TOGGLE
+// =============================================================================
+function toggleCurrency() {
+  showOriginalCurrency = !showOriginalCurrency;
+  const label = document.getElementById('currency-label');
+  label.textContent = showOriginalCurrency ? 'Original' : 'EUR';
+  renderTable();
+  renderSummary();
+}
+
+function convertPrice(value, isin, currencyOverride) {
+  if (!showOriginalCurrency || value == null) return value;
+  const rate = getExchangeRate(isin, currencyOverride);
+  return value * rate;
+}
+
+function getCurrencyLabel(isin, currencyOverride) {
+  if (!showOriginalCurrency) return '€';
+  const currCode = getCurrency(isin, currencyOverride);
+  const labels = {'USD':'$', 'DKK':'kr', 'GBP':'£', 'SEK':'kr', 'CHF':'CHF', 'JPY':'¥', 'CNY':'¥', 'INR':'₹', 'EUR':'€', 'HKD':'HK$', 'SGD':'S$', 'CAD':'C$', 'AUD':'A$', 'KRW':'₩', 'BRL':'R$'};
+  return labels[currCode] || currCode;
+}
+
+// =============================================================================
+// PORTFOLIO TABS
+// =============================================================================
+function buildPortfolioTabs() {
+  const portfolios = new Set();
+  console.log('buildPortfolioTabs: allHoldings count =', allHoldings.length);
+  for (const h of allHoldings) {
+    console.log(`Holding: ${h.ticker}, portfolio_name: "${h.portfolio_name}"`);
+    if (h.portfolio_name && h.portfolio_name.trim()) {
+      portfolios.add(h.portfolio_name);
+    }
+  }
+  const sorted = Array.from(portfolios).sort();
+  console.log('Found portfolios:', sorted);
+
+  const container = document.getElementById('portfolio-tabs');
+  if (sorted.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:.85rem">⚠️ Keine Portfolios gefunden</span>';
+  } else {
+    container.innerHTML = sorted.map(pf =>
+      `<button class="tab-btn" data-portfolio="${pf}" onclick="switchPortfolio('${pf}')">${pf}</button>`
+    ).join('');
+  }
+}
+
+function switchPortfolio(portfolio) {
+  currentPortfolio = portfolio;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-portfolio="${portfolio}"]`).classList.add('active');
+  renderSummary();
+  renderTable();
+  renderCharts();
+}
+
+// =============================================================================
+// RENDER SUMMARY
+// =============================================================================
+function renderSummary() {
+  const filtered = currentPortfolio === 'all'
+    ? allHoldings
+    : allHoldings.filter(h => h.portfolio_name === currentPortfolio);
+
+  const total_value = filtered.reduce((s,h) => s + (h.current_value || 0), 0);
+  const total_cost = filtered.reduce((s,h) => s + (h.quantity || 0) * (h.purchase_price || 0), 0);
+  const total_ret = total_cost > 0 ? ((total_value / total_cost) - 1) * 100 : 0;
+
+  document.getElementById('total-value').textContent = fmtEur(total_value);
+  document.getElementById('total-cost').textContent = 'Einstand: ' + fmtEur(total_cost);
+  const retEl = document.getElementById('total-return');
+  retEl.textContent = fmtPct(total_ret);
+  retEl.className = 'card-value ' + colorPct(total_ret);
+  const absRet = total_value - total_cost;
+  document.getElementById('total-return-abs').textContent = fmtEur(absRet) + ' absolut';
+  document.getElementById('positions-count').textContent = filtered.length;
+  const annotated = filtered.filter(h=>h.stock_type||h.sector||h.country).length;
+  document.getElementById('annotated-count').textContent = annotated + ' / ' + filtered.length + ' annotiert';
+}
+
+// =============================================================================
+// SORTING
+// =============================================================================
+function sort(field) {
+  if (sortBy === field) {
+    sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortBy = field;
+    sortOrder = 'desc';
+  }
+  renderTable();
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll('.sort-indicator').forEach(el => el.textContent = '');
+  if (sortBy) {
+    const ind = document.getElementById(`sort-indicator-${sortBy}`);
+    if (ind) ind.textContent = sortOrder === 'asc' ? '↑' : '↓';
+  }
+}
+
+// =============================================================================
+// RENDER TABLE
+// =============================================================================
+function renderTable() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const secF = document.getElementById('sector-filter').value;
+  const typF = document.getElementById('type-filter').value;
+
+  let rows = allHoldings.filter(h => {
+    if (currentPortfolio !== 'all' && h.portfolio_name !== currentPortfolio) return false;
+    if (q && !h.ticker.toLowerCase().includes(q) && !h.name?.toLowerCase().includes(q)) return false;
+    if (secF && h.sector !== secF) return false;
+    if (typF && h.stock_type !== typF) return false;
+    return true;
+  });
+
+  // Sort rows
+  rows.sort((a, b) => {
+    let aVal = a[sortBy];
+    let bVal = b[sortBy];
+    if (aVal == null) aVal = '';
+    if (bVal == null) bVal = '';
+    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+    if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  updateSortIndicators();
+
+  if (!rows.length) {
+    document.getElementById('holdings-tbody').innerHTML =
+      '<tr><td colspan="15"><div class="empty-state"><div class="icon">🔍</div><p>Keine Positionen gefunden.</p></div></td></tr>';
+    return;
+  }
+
+  const tbody = document.getElementById('holdings-tbody');
+  tbody.innerHTML = rows.map((h,i) => {
+    const retCls = colorPct(h.total_return_pct);
+    const typeBadge = h.stock_type ? typeHtml(h.stock_type) : '<span class="badge badge-empty">—</span>';
+    const ddHtml = drawdownBarHtml(h.current_drawdown_pct, h.typical_drawdown);
+    const cagrCls = h.return_15y_cagr != null ? colorPct(h.return_15y_cagr) : 'neu';
+    const buyStatus = h.buy_target && h.current_price <= h.buy_target ? '🟢' : '';
+    const sellStatus = h.sell_target && h.current_price >= h.sell_target ? '🔴' : '';
+
+    const curr = getCurrency(h.isin, h.currency_override);
+    const currLabel = getCurrencyLabel(h.isin, h.currency_override);
+    const pp = convertPrice(h.purchase_price, h.isin, h.currency_override);
+    const cp = convertPrice(h.current_price, h.isin, h.currency_override);
+    const cv = convertPrice(h.current_value, h.isin, h.currency_override);
+
+    // Position pill styling
+    const posPill = h.position_size ? (() => {
+      const sizeMap = {'25%':'position-25', '50%':'position-50', '75%':'position-75', '100%':'position-100'};
+      const cls = sizeMap[h.position_size] || '';
+      return `<span class="position-pill ${cls}">${h.position_size}</span>`;
+    })() : '<span style="color:var(--muted)">—</span>';
+
+    return `<tr onclick="openEditPanel('${h.ticker}')">
+      <td style="text-align:center">${posPill}</td>
+      <td class="name-cell">
+        <span style="font-weight:600">${escHtml(h.name||h.ticker)}</span>
+        <span class="ticker-badge">${escHtml(h.ticker)}</span>
+        ${showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code})</span>` : ''}
+      </td>
+      <td style="text-align:right">${currLabel} ${fmt(pp)}</td>
+      <td style="text-align:right;font-weight:600">${currLabel} ${fmt(cp)}</td>
+      <td style="text-align:right;font-weight:700">${currLabel} ${fmt(cv)}</td>
+      <td style="text-align:right"><span class="${retCls}">${fmtPct(h.total_return_pct)}</span></td>
+      <td>${typeBadge}</td>
+      <td style="color:var(--muted);font-size:.78rem">${h.sector ? sectorIcon(h.sector)+' '+h.sector : '—'}</td>
+      <td style="color:var(--muted);font-size:.78rem">${h.country ? countryFlag(h.country)+' '+h.country : '—'}</td>
+      <td style="text-align:right;font-size:.8rem">${h.buy_target!=null ? buyStatus+' '+currLabel+' '+fmt(convertPrice(h.buy_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td style="text-align:right;font-size:.8rem">${h.sell_target!=null ? sellStatus+' '+currLabel+' '+fmt(convertPrice(h.sell_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${ddHtml}</td>
+      <td style="text-align:right"><span class="${cagrCls}">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterTable() { renderTable(); }
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function typeHtml(t) {
+  const map = {growth:'📈 Wachstum',dividend:'💰 Dividende',cashflow:'🔄 Cashflow'};
+  const cls = {growth:'badge-growth',dividend:'badge-dividend',cashflow:'badge-cashflow'};
+  return `<span class="badge ${cls[t]||''}">${map[t]||t}</span>`;
+}
+
+function sectorIcon(s) {
+  const icons = {
+    'Informationstechnologie':'💻','Nichtbasiskonsum':'🛍️','Gesundheit':'🏥',
+    'Industrie':'🏭','Basiskonsum':'🛒','Finanzen':'🏦','Grundstoffe':'⛏️',
+    'Versorgung':'⚡','Immobilien':'🏢','Kommunikation':'📡','Energie':'🛢️'
+  };
+  return icons[s] || '•';
+}
+
+function countryFlag(c) {
+  const flags = {
+    'Deutschland':'🇩🇪','USA':'🇺🇸','Vereinigtes Königreich':'🇬🇧',
+    'Schweiz':'🇨🇭','Niederlande':'🇳🇱','Frankreich':'🇫🇷','Schweden':'🇸🇪',
+    'Dänemark':'🇩🇰','Norwegen':'🇳🇴','Japan':'🇯🇵','China':'🇨🇳',
+    'Südkorea':'🇰🇷','Kanada':'🇨🇦','Australien':'🇦🇺','Spanien':'🇪🇸',
+    'Italien':'🇮🇹','Österreich':'🇦🇹','Belgien':'🇧🇪','Irland':'🇮🇪',
+    'Luxemburg':'🇱🇺'
+  };
+  return flags[c] || '🌐';
+}
+
+function drawdownBarHtml(current, typical) {
+  if (current == null) return '<span style="color:var(--muted)">—</span>';
+
+  // Wenn kein typischer DD: zeige nur aktuellen
+  if (typical == null) {
+    const maxBar = Math.min(Math.abs(current || 20), 60);
+    const fillPct = maxBar > 0 ? Math.min(Math.abs(current) * 100 / maxBar, 100) : 0;
+    const color = current < -10 ? 'var(--red)' : current < -5 ? 'var(--amber)' : '#94a3b8';
+    return `<div class="dd-bar-wrap">
+      <div class="dd-bar-track">
+        <div class="dd-bar-fill" style="width:${fillPct}%;background:${color}"></div>
+      </div>
+      <span class="dd-val">${fmt(current,1)}%</span>
+    </div>`;
+  }
+
+  // Mit typischem DD: Vergleich anzeigen
+  const maxBar = Math.max(Math.abs(typical), Math.abs(current), 15);
+  const currentPct = maxBar > 0 ? Math.min(Math.abs(current) * 100 / maxBar, 100) : 0;
+  const typicalPct = maxBar > 0 ? Math.min(Math.abs(typical) * 100 / maxBar, 100) : 0;
+
+  // Farbe basierend auf Vergleich
+  let color;
+  const diff = Math.abs(current) - Math.abs(typical);
+  if (Math.abs(diff) < 0.5) {
+    color = '#fbbf24'; // Gelb - normal
+  } else if (diff < 0) {
+    color = '#22c55e'; // Grün - besser als typisch
+  } else if (diff < 2) {
+    color = '#f59e0b'; // Orange - leicht drüber
+  } else {
+    color = 'var(--red)'; // Rot - deutlich drüber
+  }
+
+  return `<div style="font-size:.75rem">
+    <div class="dd-bar-wrap" style="margin-bottom:.3rem">
+      <div class="dd-bar-track" style="height:8px">
+        <div class="dd-bar-fill" style="width:${currentPct}%;background:${color};height:8px"></div>
+        <div class="dd-avg-line" style="left:${typicalPct}%;top:-2px;bottom:-2px;width:2px;background:#64748b"></div>
+      </div>
+      <span class="dd-val">${fmt(current,1)}%</span>
+    </div>
+    <div style="color:var(--muted);font-size:.7rem;margin-left:auto;text-align:right">Typ: ${fmt(typical,1)}%</div>
+  </div>`;
+}
+
+// =============================================================================
+// CHARTS
+// =============================================================================
+function renderCharts() {
+  renderDDChart();
+  renderSectorChart();
+}
+
+function renderDDChart() {
+  const filtered = currentPortfolio === 'all'
+    ? allHoldings
+    : allHoldings.filter(h => h.portfolio_name === currentPortfolio);
+  const data = filtered.filter(h => h.current_drawdown_pct != null).slice(0,15);
+  if (!data.length) return;
+
+  const labels = data.map(h => h.ticker);
+  const current = data.map(h => h.current_drawdown_pct);
+  const avg     = data.map(h => h.avg_drawdown_pct);
+
+  if (ddChart) ddChart.destroy();
+  const ctx = document.getElementById('ddChart').getContext('2d');
+  ddChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Aktuell',data:current,backgroundColor:'rgba(239,68,68,.75)',borderRadius:4},
+        {label:'Ø Historisch',data:avg,backgroundColor:'rgba(100,116,139,.45)',borderRadius:4},
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}},
+                tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.x?.toFixed(1)}%`}}},
+      scales: {
+        x:{ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},
+        y:{ticks:{font:{size:10}},grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderSectorChart() {
+  const filtered = currentPortfolio === 'all'
+    ? allHoldings
+    : allHoldings.filter(h => h.portfolio_name === currentPortfolio);
+
+  const sectorMap = {};
+  for (const h of filtered) {
+    if (!h.sector) continue;
+    sectorMap[h.sector] = (sectorMap[h.sector]||0) + (h.current_value||0);
+  }
+
+  const uncat = allHoldings.filter(h=>!h.sector).reduce((s,h)=>s+(h.current_value||0),0);
+  if (uncat > 0) sectorMap['Nicht kategorisiert'] = uncat;
+
+  const labels = Object.keys(sectorMap);
+  const values = Object.values(sectorMap);
+
+  if (!labels.length) return;
+
+  const colors = [
+    '#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6',
+    '#06b6d4','#84cc16','#f97316','#ec4899','#6366f1','#14b8a6'
+  ];
+
+  if (sectorChart) sectorChart.destroy();
+  const ctx = document.getElementById('sectorChart').getContext('2d');
+  sectorChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{data:values,backgroundColor:colors,borderWidth:2,borderColor:'#fff'}]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: {
+        legend: {position:'right',labels:{font:{size:10},boxWidth:12,padding:8}},
+        tooltip: {callbacks:{label: c => {
+          const pct = (c.parsed / values.reduce((a,b)=>a+b,0)*100).toFixed(1);
+          return ` ${c.label}: €${c.parsed.toLocaleString('de-DE',{maximumFractionDigits:0})} (${pct}%)`;
+        }}}
+      }
+    }
+  });
+}
+
+// =============================================================================
+// EDIT PANEL
+// =============================================================================
+async function openEditPanel(ticker) {
+  editTicker = ticker;
+  const h = allHoldings.find(x=>x.ticker===ticker);
+  if (!h) return;
+
+  document.getElementById('panel-name').textContent = h.name || ticker;
+  document.getElementById('panel-ticker-isin').textContent = ticker + (h.isin ? ' · ' + h.isin : '');
+
+  // Drawdown comparison
+  const ddComparison = h.typical_drawdown != null ? (() => {
+    const current = h.current_drawdown_pct || 0;
+    const typical = h.typical_drawdown || 0;
+    const diff = current - typical;
+    const status = Math.abs(diff) < 1 ? '→ normal' : (diff > 0 ? `↑ ${fmt(diff,1)}% schlimmer` : `↓ ${fmt(Math.abs(diff),1)}% besser`);
+    return `${fmtPct(h.current_drawdown_pct)} / Typ: ${fmtPct(h.typical_drawdown)} ${status}`;
+  })() : fmtPct(h.current_drawdown_pct);
+
+  document.getElementById('panel-info').innerHTML = `
+    <div class="panel-info-item"><div class="panel-info-label">Kurs</div><div class="panel-info-val">${fmtEur(h.current_price)}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Größe</div><div class="panel-info-val">${h.position_size ? h.position_size : '(ungesetzt)'}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Einstand</div><div class="panel-info-val">${fmtEur(h.purchase_price)}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Rendite</div><div class="panel-info-val ${colorPct(h.total_return_pct)}">${fmtPct(h.total_return_pct)}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">DD aktuell vs. Typ</div><div class="panel-info-val ${colorPct(h.current_drawdown_pct)}">${ddComparison}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">DD Max</div><div class="panel-info-val neg">${fmtPct(h.max_drawdown_pct)}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">15J CAGR</div><div class="panel-info-val ${colorPct(h.return_15y_cagr)}">${h.return_15y_cagr!=null?fmtPct(h.return_15y_cagr)+' p.a.':'—'}</div></div>
+  `;
+
+  document.getElementById('edit-type').value   = h.stock_type || '';
+  document.getElementById('edit-sector').value = h.sector || '';
+  document.getElementById('edit-country').value = h.country || '';
+  document.getElementById('edit-buy').value    = h.buy_target != null ? h.buy_target : '';
+  document.getElementById('edit-sell').value   = h.sell_target != null ? h.sell_target : '';
+  document.getElementById('edit-notes').value  = h.notes || '';
+  document.getElementById('edit-currency').value = h.currency_override || '';
+  document.getElementById('edit-position-size').value = h.position_size || '';
+  document.getElementById('edit-typical-dd').value = h.typical_drawdown != null ? h.typical_drawdown : '';
+
+  // Zeige auto-erkannte Währung
+  const autoCurrency = getCurrency(h.isin);
+  document.getElementById('currency-auto').textContent = `Automatisch erkannt: ${autoCurrency}`;
+
+  document.getElementById('edit-panel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeEditPanel() {
+  document.getElementById('edit-panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  editTicker = null;
+}
+
+async function saveAnnotation() {
+  if (!editTicker) return;
+  const buy  = document.getElementById('edit-buy').value;
+  const sell = document.getElementById('edit-sell').value;
+
+  const typicalDd = document.getElementById('edit-typical-dd').value;
+  const body = {
+    stock_type:        document.getElementById('edit-type').value,
+    sector:            document.getElementById('edit-sector').value,
+    country:           document.getElementById('edit-country').value,
+    buy_target:        buy  ? parseFloat(buy)  : null,
+    sell_target:       sell ? parseFloat(sell) : null,
+    notes:             document.getElementById('edit-notes').value,
+    currency_override: document.getElementById('edit-currency').value || '',
+    position_size:     document.getElementById('edit-position-size').value || '',
+    typical_drawdown:  typicalDd ? parseFloat(typicalDd) : null,
+  };
+
+  try {
+    await fetch(`/api/annotations/${editTicker}`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    // Update local state
+    const idx = allHoldings.findIndex(h=>h.ticker===editTicker);
+    if (idx>=0) Object.assign(allHoldings[idx], body);
+    closeEditPanel();
+    renderSummary();
+    renderTable();
+    renderCharts();
+    toast('Gespeichert ✓', 'success');
+  } catch(e) {
+    toast('Fehler beim Speichern', 'error');
+  }
+}
+
+async function clearAnnotation() {
+  if (!editTicker) return;
+  if (!confirm(`Annotationen für ${editTicker} zurücksetzen?`)) return;
+  document.getElementById('edit-type').value = '';
+  document.getElementById('edit-sector').value = '';
+  document.getElementById('edit-country').value = '';
+  document.getElementById('edit-buy').value = '';
+  document.getElementById('edit-sell').value = '';
+  document.getElementById('edit-notes').value = '';
+  document.getElementById('edit-currency').value = '';
+  document.getElementById('edit-position-size').value = '';
+  document.getElementById('edit-typical-dd').value = '';
+  await saveAnnotation();
+}
+
+// =============================================================================
+// SETTINGS MODAL
+// =============================================================================
+async function openSettings() {
+  try {
+    const cfg = await fetch('/api/config').then(r=>r.json());
+    document.getElementById('cfg-discord').value = cfg.discord_webhook_url || '';
+    document.getElementById('cfg-hour').value    = cfg.sync_hour ?? 20;
+    document.getElementById('cfg-minute').value  = cfg.sync_minute ?? 0;
+  } catch(e) {}
+  document.getElementById('settings-modal').classList.add('open');
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('open');
+}
+
+async function saveSettings() {
+  const body = {
+    discord_webhook_url: document.getElementById('cfg-discord').value.trim(),
+    sync_hour:   parseInt(document.getElementById('cfg-hour').value)||20,
+    sync_minute: parseInt(document.getElementById('cfg-minute').value)||0,
+  };
+  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  closeSettings();
+  toast('Einstellungen gespeichert', 'success');
+}
+
+
+async function testDiscord() {
+  toast('Teste Webhook…', 'info');
+  try {
+    const r = await fetch('/api/discord/test',{method:'POST'}).then(r=>r.json());
+    r.ok ? toast('Discord-Test erfolgreich!', 'success') : toast('Discord-Fehler: ' + r.error, 'error');
+  } catch(e) { toast('Fehler', 'error'); }
+}
+
+async function testParqet() {
+  toast('Teste Parqet-Verbindung…', 'info');
+  try {
+    const r = await fetch('/api/parqet/test', {method:'POST'}).then(r => {
+      if (r.status >= 400) return r.json().then(d => ({...d, ok: false}));
+      return r.json();
+    });
+    if (r.ok) {
+      toast(`✓ Parqet OK! ${r.tools_count} Tools gefunden: ${r.tools.join(', ')}`, 'success');
+    } else {
+      const msg = `Fehler (${r.step}): ${r.error}`;
+      toast(msg, 'error');
+      console.error('Parqet Test Response:', r);
+    }
+  } catch(e) {
+    toast('Fehler beim Testen: ' + e.message, 'error');
+  }
+}
+
+// =============================================================================
+// ALARMS MODAL
+// =============================================================================
+async function openAlarms() {
+  document.getElementById('alarms-modal').classList.add('open');
+  try {
+    const alarms = await fetch('/api/alarms').then(r=>r.json());
+    const el = document.getElementById('alarms-list');
+    if (!alarms.length) {
+      el.innerHTML = '<p style="color:var(--muted);font-size:.85rem;padding:.5rem 0">Noch keine Alarme ausgelöst.</p>';
+      return;
+    }
+    el.innerHTML = alarms.map(a => {
+      const d = new Date(a.triggered_at.replace(' ','T')+'Z');
+      const dt = d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const typeCls = a.alarm_type==='buy' ? 'alarm-type-buy' : 'alarm-type-sell';
+      const label = a.alarm_type==='buy' ? '🟢 KAUF' : '🔴 VERK.';
+      return `<div class="alarm-row">
+        <span class="${typeCls}">${label}</span>
+        <span style="font-weight:700">${a.ticker}</span>
+        <span style="color:var(--muted)">${fmtEur(a.price)}</span>
+        <span style="margin-left:auto;color:var(--muted);font-size:.75rem">${dt}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('alarms-list').innerHTML = '<p style="color:var(--red)">Fehler beim Laden.</p>';
+  }
+}
+
+function closeAlarms() {
+  document.getElementById('alarms-modal').classList.remove('open');
+}
+
+// =============================================================================
+// SYNC
+// =============================================================================
+async function triggerSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Syncing…';
+  toast('Sync gestartet…', 'info');
+  try {
+    await fetch('/api/sync', {method:'POST'});
+    // Poll until sync completes (max 90s)
+    let tries = 0;
+    const poll = setInterval(async () => {
+      tries++;
+      if (tries > 18) { clearInterval(poll); btn.disabled=false; btn.textContent='↻ Sync'; }
+      const s = await fetch('/api/status').then(r=>r.json()).catch(()=>null);
+      if (!s) return;
+      const prev = document.getElementById('sync-label').textContent;
+      await loadStatus();
+      const curr = document.getElementById('sync-label').textContent;
+      if (curr !== prev && curr.startsWith('Sync:')) {
+        clearInterval(poll);
+        btn.disabled=false; btn.textContent='↻ Sync';
+        await loadPortfolio();
+        toast('Sync abgeschlossen!', 'success');
+      }
+    }, 5000);
+  } catch(e) {
+    toast('Sync-Fehler', 'error');
+    btn.disabled=false; btn.textContent='↻ Sync';
+  }
+}
+
+// =============================================================================
+// CLOSE ALL (overlay click)
+// =============================================================================
+function closeAll() {
+  closeEditPanel();
+  closeSettings();
+  closeAlarms();
+}
+
+// =============================================================================
+// INIT
+// =============================================================================
+async function init() {
+  // Check connected=1 from OAuth redirect
+  const params = new URLSearchParams(location.search);
+  if (params.get('connected')) {
+    toast('Parqet erfolgreich verbunden! 🎉', 'success');
+    history.replaceState({}, '', '/');
+    triggerSync();
+  }
+
+  await loadStatus();
+  await loadPortfolio();
+}
+
+init();
+</script>
+</body>
+</html>
