@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Parqet Portfolio Dashboard</title>
+<link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEACABoBQAAFgAAACgAAAAQAAAAIAAAAAEACAAAAAAAAAEAABILAAASCwAAAAEAAAABAADy9vUAJSw4ACs5SgBNwLMAXmRsAFPVyACGqaMAR66kAEmBewBLxrsAH3FkAD2vpAAgMUYATLuxAOvr7QA1n5QARb2yADpBTAAjM0kALUdkACY5UwBEu68AMj1LAHyjnQA/npMAIS9DACk/WgAyTm0AHSc2ABonOQBQz8IAUc7CACWBdQCas7EA3+roADBKZQAYJTUA9vf4AOby8QBJsqcAqL26AB4vQwDz8/QA+fv6ACF5bABAoZYAkZSbAMjU0gAtPFIAUM/DAB8sPQBKxLgAJDZPAK+2vwDr8O8AnrayAF+LhQBLtq0AzM/TAElbcABWh34AUtPGABskMwD29vcAV2yCAExRWwC5zssAzdvZAMrT0QCvvMAANlVzADNQbgBvd38ATMe7AE/MvwBSpZoAnba7ACp9cgBQsaYAR4uDAPL5+ADb5ugAk7GsAG9+jwB5h4sAapKOAIWPmwAzjIIAiZKcACyQhQDP0NIAbnyQAB0oNgCjpqoAgMnAADaDegDi5OUATXJtADSQhQA6mI0AQameADpGVAAwQFgAQZ6VAKqyugBveYQA5fDvAMTh3gCZtbAALHJoAFWIgwDe7uwASbGoAFGBeQDHzdIAisnCAC2EeQBOX3oA4unoAOXr6gBQzsIApLm2AEJ7cgA2SF4AUNDDAB8rPQD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfn5+fn5+JV0EEQEBAQEEf35+fn5+DkE+HBwcXBwcEX9+fn42bFQ+fTJ9fX19fRZ/fn53ejhIHRkZGRkZGRkCf34rPAooLiQZEhISEhISAn9+KAosQ2ABHSkMDBI0FDB/AHEgdCJ+WgQWAmUCFBp7fy9tWWJqfn5+Kg4/aRoTO383TQ8PayZvAH5+flgTG1N/BlcLCycHZE5zUH5WR0c1fxdjFRAQEBAQFV5+W0ZAJX8XGDNJCQkJCUkDUXUjcn5/Bi1KfB4eHjF4A0xmaH5+f1IYHwUFBT0fA0tFOn5+fn95X3ANDTkHZ09Cfn5+fn5/RGEICAhuVSF2fn5+fn5+fwABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAA=">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -70,8 +72,7 @@ main{padding:1.5rem 1.75rem 3rem;max-width:1600px;margin:0 auto}
 .pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--muted)}
 
 /* Charts row */
-.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem}
-@media(max-width:900px){.charts-row{grid-template-columns:1fr}}
+.charts-row{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1.25rem}
 .chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.25rem;box-shadow:var(--shadow)}
 .chart-card h3{font-size:.85rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.9rem}
 .chart-wrap{position:relative;height:260px}
@@ -276,10 +277,6 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
 
   <!-- Charts -->
   <div class="charts-row">
-    <div class="chart-card">
-      <h3>Drawdown-Vergleich (Aktuell vs. Ø)</h3>
-      <div class="chart-wrap"><canvas id="ddChart"></canvas></div>
-    </div>
     <div class="chart-card">
       <div class="chart-head">
         <h3>Verteilung</h3>
@@ -600,7 +597,6 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
 let allHoldings = [];
 let summary = {};
 let editTicker = null;
-let ddChart = null;
 let sectorChart = null;
 let allocDimension = "sector";   // sector | type | country
 let currentPortfolio = "all";
@@ -1069,44 +1065,7 @@ function drawdownBarHtml(current, typical) {
 // CHARTS
 // =============================================================================
 function renderCharts() {
-  renderDDChart();
   renderSectorChart();
-}
-
-function renderDDChart() {
-  const filtered = currentPortfolio === 'all'
-    ? allHoldings
-    : allHoldings.filter(h => h.portfolio_name === currentPortfolio);
-  const data = filtered.filter(h => h.current_drawdown_pct != null).slice(0,15);
-  if (!data.length) return;
-
-  const labels = data.map(h => h.ticker);
-  const current = data.map(h => h.current_drawdown_pct);
-  const avg     = data.map(h => h.avg_drawdown_pct);
-
-  if (ddChart) ddChart.destroy();
-  const ctx = document.getElementById('ddChart').getContext('2d');
-  ddChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        {label:'Aktuell',data:current,backgroundColor:'rgba(239,68,68,.75)',borderRadius:4},
-        {label:'Ø Historisch',data:avg,backgroundColor:'rgba(100,116,139,.45)',borderRadius:4},
-      ]
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}},
-                tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.x?.toFixed(1)}%`}}},
-      scales: {
-        x:{ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}},
-        y:{ticks:{font:{size:10}},grid:{display:false}}
-      }
-    }
-  });
 }
 
 const TYPE_LABELS = {growth:'📈 Wachstum',dividend:'💰 Dividende',cashflow:'🔄 Cashflow'};
