@@ -348,6 +348,18 @@ def api_sync():
     return jsonify({"ok": True, "message": "Sync läuft im Hintergrund..."})
 
 
+@app.route("/api/keepalive", methods=["GET", "POST"])
+def api_keepalive():
+    """Leichtgewichtige Token-Auffrischung (per Server-Cron alle ~30 Min aufgerufen).
+    Hält den Parqet-Token am Leben, ohne den schweren Voll-Sync auszulösen."""
+    from sync import refresh_token_if_needed
+    cfg = load_config()
+    if not cfg.get("parqet_refresh_token"):
+        return jsonify({"ok": False, "error": "kein refresh_token — bitte verbinden"}), 400
+    cfg = refresh_token_if_needed(cfg, force=True)
+    return jsonify({"ok": bool(cfg.get("parqet_last_refresh_ok"))})
+
+
 @app.route("/api/alarms")
 def api_alarms():
     with get_db() as db:

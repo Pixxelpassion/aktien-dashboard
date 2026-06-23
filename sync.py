@@ -352,10 +352,24 @@ def fetch_exchange_rates() -> dict:
     return rates
 
 
-def refresh_token_if_needed(cfg: dict) -> dict:
+def _maybe_alert(cfg: dict, webhook: str, title: str, desc: str, color: int = 0xF59E0B):
+    """Discord-Alarm, aber hoechstens alle 6 Stunden (gegen Spam beim haeufigen Keepalive)."""
+    now = time.time()
+    if now - cfg.get("parqet_last_fail_alert_at", 0) < 6 * 3600:
+        return
+    cfg["parqet_last_fail_alert_at"] = now
+    save_config(cfg)
+    send_discord_message(webhook, title, desc, color)
+
+
+def refresh_token_if_needed(cfg: dict, force: bool = False) -> dict:
     expires_at = cfg.get("parqet_token_expires_at", 0)
     refresh = cfg.get("parqet_refresh_token", "")
-    if not refresh or time.time() < expires_at - 300:
+    if not refresh:
+        return cfg
+    # Normal: nur erneuern wenn der Access-Token bald ablaeuft. force=True (Keepalive)
+    # erneuert immer und rotiert so den refresh_token, damit er nie "einschlaeft".
+    if not force and time.time() < expires_at - 300:
         return cfg
 
     print("[OAuth] Erneuere Access Token...")
@@ -367,19 +381,19 @@ def refresh_token_if_needed(cfg: dict) -> dict:
             "client_id": "019c28d5-e0a0-703f-a790-10c15c2310ee",
         }, timeout=15)
     except Exception as e:
-        # Vorübergehender Netzwerkfehler — nächster Sync versucht es erneut.
+        # Vorübergehender Netzwerkfehler — nächster Versuch läuft automatisch.
         print(f"[OAuth] Netzwerkfehler beim Erneuern: {e}")
-        send_discord_message(
-            webhook,
+        _maybe_alert(
+            cfg, webhook,
             "⚠️ Parqet: Token-Erneuerung gestört",
             f"Die Verbindung zu Parqet war kurz nicht erreichbar (`{e}`). "
-            f"Der nächste Sync versucht es automatisch erneut — vermutlich nichts zu tun.",
+            f"Der nächste Versuch läuft automatisch — vermutlich nichts zu tun.",
         )
         return cfg
 
     if resp.status_code == 200:
         data = resp.json()
-        cfg["parqet_access_token"] = data.get("access_token", cfg["parqet_access_token"])
+        cfg["parqet_access_token"] = data.get("access_token", cfg.get("parqet_access_token", ""))
         cfg["parqet_refresh_token"] = data.get("refresh_token", refresh)
         cfg["parqet_token_expires_at"] = int(time.time()) + data.get("expires_in", 3600)
         cfg["parqet_last_refresh_ok"] = True
@@ -390,11 +404,11 @@ def refresh_token_if_needed(cfg: dict) -> dict:
         print(f"[OAuth] Fehler beim Erneuern: {resp.status_code} {resp.text[:200]}")
         cfg["parqet_last_refresh_ok"] = False
         save_config(cfg)
-        send_discord_message(
-            webhook,
+        _maybe_alert(
+            cfg, webhook,
             "🔴 Parqet-Verbindung abgelaufen — Aktion nötig",
             f"Die automatische Token-Erneuerung ist fehlgeschlagen (HTTP {resp.status_code}). "
-            f"Der Dauer-Schlüssel ist vermutlich abgelaufen.\n\n"
+            f"Der Dauer-Schlüssel ist abgelaufen.\n\n"
             f"**Bitte einmal lokal neu mit Parqet verbinden** und den Token auf den Server "
             f"übertragen (die bekannte 2-Minuten-Prozedur). Bis dahin pausiert der Sync.",
             color=0xEF4444,
