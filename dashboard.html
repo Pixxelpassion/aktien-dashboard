@@ -81,6 +81,13 @@ main{padding:1.5rem 1.75rem 3rem;max-width:1600px;margin:0 auto}
 .seg button{border:none;background:transparent;font-family:var(--body-font);font-size:.72rem;font-weight:600;color:var(--muted);padding:.3rem .65rem;border-radius:6px;cursor:pointer;transition:all .15s}
 .seg button.active{background:var(--accent);color:#fff}
 .seg button:not(.active):hover{color:var(--text)}
+.col-menu-wrap{position:relative}
+.col-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:50;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-md);padding:.5rem;min-width:200px;display:none;max-height:340px;overflow-y:auto}
+.col-menu.open{display:block}
+.col-menu .col-menu-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding:.25rem .5rem .4rem}
+.col-menu label{display:flex;align-items:center;gap:.5rem;padding:.32rem .5rem;border-radius:6px;font-size:.82rem;color:var(--text);cursor:pointer}
+.col-menu label:hover{background:var(--bg)}
+.col-menu input{accent-color:var(--accent);cursor:pointer}
 
 /* Table section */
 .table-section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
@@ -319,6 +326,10 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
         <option value="dividend">Dividende</option>
         <option value="cashflow">Cashflow</option>
       </select>
+      <div class="col-menu-wrap">
+        <button class="filter-select" id="col-menu-btn" onclick="toggleColMenu(event)">⚙️ Spalten</button>
+        <div class="col-menu" id="col-menu"></div>
+      </div>
       <div class="table-spacer"></div>
       <span style="font-size:.76rem;color:var(--muted)">Klick auf Zeile zum Bearbeiten</span>
     </div>
@@ -326,43 +337,43 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
       <table>
         <thead>
           <tr>
-            <th style="cursor:pointer;text-align:center" onclick="sort('position_size')">
+            <th data-col="position_size" style="cursor:pointer;text-align:center" onclick="sort('position_size')">
               Position <span id="sort-indicator-position_size" class="sort-indicator"></span>
             </th>
-            <th style="cursor:pointer" onclick="sort('name')">
+            <th data-col="name" style="cursor:pointer" onclick="sort('name')">
               Name <span id="sort-indicator-name" class="sort-indicator"></span>
             </th>
-            <th style="text-align:right;cursor:pointer" onclick="sort('purchase_price')">
+            <th data-col="purchase_price" style="text-align:right;cursor:pointer" onclick="sort('purchase_price')">
               Einstand <span id="sort-indicator-purchase_price" class="sort-indicator"></span>
             </th>
-            <th style="text-align:right;cursor:pointer" onclick="sort('current_price')">
+            <th data-col="current_price" style="text-align:right;cursor:pointer" onclick="sort('current_price')">
               Kurs <span id="sort-indicator-current_price" class="sort-indicator"></span>
             </th>
-            <th style="text-align:right;cursor:pointer" onclick="sort('current_value')">
+            <th data-col="current_value" style="text-align:right;cursor:pointer" onclick="sort('current_value')">
               Wert <span id="sort-indicator-current_value" class="sort-indicator"></span>
             </th>
-            <th style="text-align:right;cursor:pointer" onclick="sort('total_return_pct')">
+            <th data-col="total_return_pct" style="text-align:right;cursor:pointer" onclick="sort('total_return_pct')">
               +/- % <span id="sort-indicator-total_return_pct" class="sort-indicator"></span>
             </th>
-            <th style="cursor:pointer" onclick="sort('stock_type')">
+            <th data-col="stock_type" style="cursor:pointer" onclick="sort('stock_type')">
               Typ <span id="sort-indicator-stock_type" class="sort-indicator"></span>
             </th>
-            <th style="cursor:pointer" onclick="sort('sector')">
+            <th data-col="sector" style="cursor:pointer" onclick="sort('sector')">
               Sektor <span id="sort-indicator-sector" class="sort-indicator"></span>
             </th>
-            <th style="cursor:pointer" onclick="sort('country')">
+            <th data-col="country" style="cursor:pointer" onclick="sort('country')">
               Land <span id="sort-indicator-country" class="sort-indicator"></span>
             </th>
-            <th style="text-align:right;cursor:pointer" onclick="sort('buy_target')">
+            <th data-col="buy_target" style="text-align:right;cursor:pointer" onclick="sort('buy_target')">
               Kaufm. <span id="sort-indicator-buy_target" class="sort-indicator"></span>
             </th>
-            <th style="text-align:right;cursor:pointer" onclick="sort('sell_target')">
+            <th data-col="sell_target" style="text-align:right;cursor:pointer" onclick="sort('sell_target')">
               Verkm. <span id="sort-indicator-sell_target" class="sort-indicator"></span>
             </th>
-            <th style="cursor:pointer" onclick="sort('current_drawdown_pct')">
+            <th data-col="current_drawdown_pct" style="cursor:pointer" onclick="sort('current_drawdown_pct')">
               DD vs. Typ <span id="sort-indicator-current_drawdown_pct" class="sort-indicator"></span>
             </th>
-            <th style="text-align:right;cursor:pointer" onclick="sort('return_15y_cagr')">
+            <th data-col="return_15y_cagr" style="text-align:right;cursor:pointer" onclick="sort('return_15y_cagr')">
               15J p.a. <span id="sort-indicator-return_15y_cagr" class="sort-indicator"></span>
             </th>
           </tr>
@@ -819,6 +830,59 @@ function updateSortIndicators() {
 // =============================================================================
 // RENDER TABLE
 // =============================================================================
+// =============================================================================
+// SPALTEN-KONFIGURATION (persistent via localStorage)
+// =============================================================================
+const COLUMNS = [
+  {key:'position_size',        label:'Position'},
+  {key:'purchase_price',       label:'Einstand'},
+  {key:'current_price',        label:'Kurs'},
+  {key:'current_value',        label:'Wert'},
+  {key:'total_return_pct',     label:'+/- %'},
+  {key:'stock_type',           label:'Typ'},
+  {key:'sector',               label:'Sektor'},
+  {key:'country',              label:'Land'},
+  {key:'buy_target',           label:'Kaufmarke'},
+  {key:'sell_target',          label:'Verkaufsmarke'},
+  {key:'current_drawdown_pct', label:'DD vs. Typ'},
+  {key:'return_15y_cagr',      label:'15J p.a.'},
+];
+// "Name" ist bewusst nicht abwählbar (Zeilen-Identität)
+
+let hiddenCols = new Set();
+try { hiddenCols = new Set(JSON.parse(localStorage.getItem('pp_hidden_cols') || '[]')); } catch(e) {}
+
+function applyColumnVisibility() {
+  document.querySelectorAll('[data-col]').forEach(el => {
+    el.style.display = hiddenCols.has(el.dataset.col) ? 'none' : '';
+  });
+}
+
+function toggleColumn(key, visible) {
+  if (visible) hiddenCols.delete(key); else hiddenCols.add(key);
+  localStorage.setItem('pp_hidden_cols', JSON.stringify([...hiddenCols]));
+  applyColumnVisibility();
+}
+
+function renderColMenu() {
+  const menu = document.getElementById('col-menu');
+  if (!menu) return;
+  menu.innerHTML = '<div class="col-menu-title">Spalten anzeigen</div>' + COLUMNS.map(c =>
+    `<label><input type="checkbox" ${hiddenCols.has(c.key) ? '' : 'checked'} onchange="toggleColumn('${c.key}', this.checked)"> ${c.label}</label>`
+  ).join('');
+}
+
+function toggleColMenu(ev) {
+  if (ev) ev.stopPropagation();
+  document.getElementById('col-menu').classList.toggle('open');
+}
+
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('.col-menu-wrap');
+  const menu = document.getElementById('col-menu');
+  if (wrap && menu && !wrap.contains(e.target)) menu.classList.remove('open');
+});
+
 function renderTable() {
   const q = document.getElementById('search-input').value.toLowerCase();
   const secF = document.getElementById('sector-filter').value;
@@ -850,6 +914,7 @@ function renderTable() {
   if (!rows.length) {
     document.getElementById('holdings-tbody').innerHTML =
       '<tr><td colspan="15"><div class="empty-state"><div class="icon">🔍</div><p>Keine Positionen gefunden.</p></div></td></tr>';
+    applyColumnVisibility();
     return;
   }
 
@@ -876,25 +941,27 @@ function renderTable() {
     })() : '<span style="color:var(--muted)">—</span>';
 
     return `<tr onclick="openEditPanel('${h.ticker}')">
-      <td style="text-align:center">${posPill}</td>
-      <td class="name-cell">
+      <td data-col="position_size" style="text-align:center">${posPill}</td>
+      <td data-col="name" class="name-cell">
         <span style="font-weight:600">${escHtml(h.name||h.ticker)}</span>
         <span class="ticker-badge">${escHtml(h.ticker)}</span>
         ${showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code})</span>` : ''}
       </td>
-      <td style="text-align:right">${currLabel} ${fmt(pp)}</td>
-      <td style="text-align:right;font-weight:600">${currLabel} ${fmt(cp)}</td>
-      <td style="text-align:right;font-weight:700">${currLabel} ${fmt(cv)}</td>
-      <td style="text-align:right"><span class="${retCls}">${fmtPct(h.total_return_pct)}</span></td>
-      <td>${typeBadge}</td>
-      <td style="color:var(--muted);font-size:.78rem">${h.sector ? sectorIcon(h.sector)+' '+h.sector : '—'}</td>
-      <td style="color:var(--muted);font-size:.78rem">${h.country ? countryFlag(h.country)+' '+h.country : '—'}</td>
-      <td style="text-align:right;font-size:.8rem">${h.buy_target!=null ? buyStatus+' '+currLabel+' '+fmt(convertPrice(h.buy_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
-      <td style="text-align:right;font-size:.8rem">${h.sell_target!=null ? sellStatus+' '+currLabel+' '+fmt(convertPrice(h.sell_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
-      <td>${ddHtml}</td>
-      <td style="text-align:right"><span class="${cagrCls}">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</span></td>
+      <td data-col="purchase_price" style="text-align:right">${currLabel} ${fmt(pp)}</td>
+      <td data-col="current_price" style="text-align:right;font-weight:600">${currLabel} ${fmt(cp)}</td>
+      <td data-col="current_value" style="text-align:right;font-weight:700">${currLabel} ${fmt(cv)}</td>
+      <td data-col="total_return_pct" style="text-align:right"><span class="${retCls}">${fmtPct(h.total_return_pct)}</span></td>
+      <td data-col="stock_type">${typeBadge}</td>
+      <td data-col="sector" style="color:var(--muted);font-size:.78rem">${h.sector ? sectorIcon(h.sector)+' '+h.sector : '—'}</td>
+      <td data-col="country" style="color:var(--muted);font-size:.78rem">${h.country ? countryFlag(h.country)+' '+h.country : '—'}</td>
+      <td data-col="buy_target" style="text-align:right;font-size:.8rem">${h.buy_target!=null ? buyStatus+' '+currLabel+' '+fmt(convertPrice(h.buy_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td data-col="sell_target" style="text-align:right;font-size:.8rem">${h.sell_target!=null ? sellStatus+' '+currLabel+' '+fmt(convertPrice(h.sell_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td data-col="current_drawdown_pct">${ddHtml}</td>
+      <td data-col="return_15y_cagr" style="text-align:right"><span class="${cagrCls}">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</span></td>
     </tr>`;
   }).join('');
+
+  applyColumnVisibility();
 }
 
 function filterTable() { renderTable(); }
@@ -1337,6 +1404,8 @@ async function init() {
     triggerSync();
   }
 
+  renderColMenu();
+  applyColumnVisibility();
   await loadStatus();
   await loadPortfolio();
 }

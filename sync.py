@@ -574,27 +574,39 @@ def _normalize_holding(h: dict) -> dict | None:
     if not ticker:
         return None
 
+    purchase_price = float(
+        h.get("purchasePrice") or h.get("avgBuyPrice") or
+        h.get("averageBuyPrice") or h.get("buyPrice") or h.get("averagePrice") or 0
+    )
+    current_price = float(
+        h.get("currentPrice") or h.get("lastPrice") or
+        h.get("price") or h.get("marketPrice") or h.get("recentPrice") or 0
+    )
+
+    # Rendite selbst aus Einstand/Kurs berechnen — Parqet liefert die
+    # Rendite-Felder oft nicht (dann stand +/- immer auf 0,00 %).
+    # Fallback: ein evtl. doch geliefertes Parqet-Feld.
+    parqet_ret = float(
+        h.get("returnPct") or h.get("return_pct") or
+        h.get("totalReturn") or h.get("return") or h.get("performance") or 0
+    )
+    if purchase_price > 0 and current_price > 0:
+        total_return_pct = (current_price / purchase_price - 1) * 100
+    else:
+        total_return_pct = parqet_ret
+
     return {
         "ticker": ticker,
         "name": h.get("name") or h.get("nickname") or h.get("assetName") or h.get("title") or ticker,
         "isin": h.get("isin") or h.get("identifier") or "",
         "quantity": float(h.get("quantity") or h.get("shares") or h.get("amount") or h.get("position") or 0),
-        "purchase_price": float(
-            h.get("purchasePrice") or h.get("avgBuyPrice") or
-            h.get("averageBuyPrice") or h.get("buyPrice") or h.get("averagePrice") or 0
-        ),
-        "current_price": float(
-            h.get("currentPrice") or h.get("lastPrice") or
-            h.get("price") or h.get("marketPrice") or h.get("recentPrice") or 0
-        ),
+        "purchase_price": purchase_price,
+        "current_price": current_price,
         "current_value": float(
             h.get("currentValue") or h.get("totalValue") or
             h.get("marketValue") or h.get("value") or 0
         ),
-        "total_return_pct": float(
-            h.get("returnPct") or h.get("return_pct") or
-            h.get("totalReturn") or h.get("return") or h.get("performance") or 0
-        ),
+        "total_return_pct": total_return_pct,
         "weight": float(
             h.get("weight") or h.get("portfolioWeight") or
             h.get("allocation") or 0
