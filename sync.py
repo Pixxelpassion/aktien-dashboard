@@ -359,11 +359,23 @@ def refresh_token_if_needed(cfg: dict) -> dict:
         return cfg
 
     print("[OAuth] Erneuere Access Token...")
-    resp = http.post("https://connect.parqet.com/oauth2/token", data={
-        "grant_type": "refresh_token",
-        "refresh_token": refresh,
-        "client_id": "019c28d5-e0a0-703f-a790-10c15c2310ee",
-    }, timeout=15)
+    webhook = cfg.get("discord_webhook_url", "")
+    try:
+        resp = http.post("https://connect.parqet.com/oauth2/token", data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": "019c28d5-e0a0-703f-a790-10c15c2310ee",
+        }, timeout=15)
+    except Exception as e:
+        # Vorübergehender Netzwerkfehler — nächster Sync versucht es erneut.
+        print(f"[OAuth] Netzwerkfehler beim Erneuern: {e}")
+        send_discord_message(
+            webhook,
+            "⚠️ Parqet: Token-Erneuerung gestört",
+            f"Die Verbindung zu Parqet war kurz nicht erreichbar (`{e}`). "
+            f"Der nächste Sync versucht es automatisch erneut — vermutlich nichts zu tun.",
+        )
+        return cfg
 
     if resp.status_code == 200:
         data = resp.json()
@@ -373,7 +385,17 @@ def refresh_token_if_needed(cfg: dict) -> dict:
         save_config(cfg)
         print("[OAuth] Token erneuert.")
     else:
+        # Echte Auth-Fehler (Dauer-Schlüssel abgelaufen/ungültig) — Aktion nötig.
         print(f"[OAuth] Fehler beim Erneuern: {resp.status_code} {resp.text[:200]}")
+        send_discord_message(
+            webhook,
+            "🔴 Parqet-Verbindung abgelaufen — Aktion nötig",
+            f"Die automatische Token-Erneuerung ist fehlgeschlagen (HTTP {resp.status_code}). "
+            f"Der Dauer-Schlüssel ist vermutlich abgelaufen.\n\n"
+            f"**Bitte einmal lokal neu mit Parqet verbinden** und den Token auf den Server "
+            f"übertragen (die bekannte 2-Minuten-Prozedur). Bis dahin pausiert der Sync.",
+            color=0xEF4444,
+        )
 
     return cfg
 
@@ -500,6 +522,27 @@ def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: fl
             ],
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
             "footer": {"text": "Parqet Dashboard · Automatischer Alarm"},
+        }]
+    }
+    try:
+        r = http.post(webhook_url, json=payload, timeout=10)
+        if r.status_code not in (200, 204):
+            print(f"[Discord] HTTP {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        print(f"[Discord] Fehler: {e}")
+
+
+def send_discord_message(webhook_url: str, title: str, description: str, color: int = 0xF59E0B):
+    """Generische System-Nachricht (z. B. Frühwarnung bei Token-Problemen)."""
+    if not webhook_url:
+        return
+    payload = {
+        "embeds": [{
+            "title": title,
+            "description": description,
+            "color": color,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "footer": {"text": "Parqet Dashboard · System"},
         }]
     }
     try:
