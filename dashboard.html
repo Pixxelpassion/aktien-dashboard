@@ -106,6 +106,9 @@ tbody tr:last-child{border-bottom:none}
 td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
 .ticker-badge{display:inline-block;background:var(--accent-light);color:var(--accent);font-weight:700;font-size:.72rem;padding:.15rem .4rem;border-radius:5px;margin-left:.4rem}
 .name-cell{max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.name-link{color:var(--pp-teal);font-weight:600;text-decoration:none}
+.name-link:hover{text-decoration:underline}
+.name-link .link-arrow{font-size:.7rem;opacity:.7}
 .val-pos{color:var(--green);font-weight:600}
 .val-neg{color:var(--red);font-weight:600}
 
@@ -473,6 +476,11 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
     <div class="form-group">
       <label>Notizen</label>
       <input class="form-input" type="text" id="edit-notes" placeholder="Eigene Anmerkungen…">
+    </div>
+    <div class="form-group">
+      <label>🔗 Aktienreport-URL</label>
+      <input class="form-input" type="url" id="edit-report-url" placeholder="https://…">
+      <span style="font-size:.73rem;color:var(--muted)">Verlinkt den Aktiennamen in der Tabelle zur Aktienvorstellung (öffnet in neuem Tab).</span>
     </div>
     <hr style="border:none;border-top:1px solid var(--border);margin:1rem 0">
     <div class="form-group">
@@ -943,7 +951,7 @@ function renderTable() {
     return `<tr onclick="openEditPanel('${h.ticker}')">
       <td data-col="position_size" style="text-align:center">${posPill}</td>
       <td data-col="name" class="name-cell">
-        <span style="font-weight:600">${escHtml(h.name||h.ticker)}</span>
+        ${reportLinkHtml(h)}
         <span class="ticker-badge">${escHtml(h.ticker)}</span>
         ${showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code})</span>` : ''}
       </td>
@@ -968,6 +976,20 @@ function filterTable() { renderTable(); }
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function escAttr(s) {
+  return escHtml(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Aktienname; als Link, wenn eine gültige http(s)-Report-URL hinterlegt ist.
+function reportLinkHtml(h) {
+  const name = escHtml(h.name || h.ticker);
+  const url = (h.report_url || '').trim();
+  if (/^https?:\/\//i.test(url)) {
+    return `<a href="${escAttr(url)}" target="_blank" rel="noopener" class="name-link" title="Aktienreport öffnen" onclick="event.stopPropagation()">${name} <span class="link-arrow">↗</span></a>`;
+  }
+  return `<span style="font-weight:600">${name}</span>`;
 }
 
 function typeHtml(t) {
@@ -1196,6 +1218,7 @@ async function openEditPanel(ticker) {
   document.getElementById('edit-currency').value = h.currency_override || '';
   document.getElementById('edit-position-size').value = h.position_size || '';
   document.getElementById('edit-typical-dd').value = h.typical_drawdown != null ? h.typical_drawdown : '';
+  document.getElementById('edit-report-url').value = h.report_url || '';
 
   // Zeige auto-erkannte Währung
   const autoCurrency = getCurrency(h.isin);
@@ -1227,6 +1250,7 @@ async function saveAnnotation() {
     currency_override: document.getElementById('edit-currency').value || '',
     position_size:     document.getElementById('edit-position-size').value || '',
     typical_drawdown:  typicalDd ? parseFloat(typicalDd) : null,
+    report_url:        document.getElementById('edit-report-url').value.trim(),
   };
 
   try {
@@ -1258,6 +1282,7 @@ async function clearAnnotation() {
   document.getElementById('edit-currency').value = '';
   document.getElementById('edit-position-size').value = '';
   document.getElementById('edit-typical-dd').value = '';
+  document.getElementById('edit-report-url').value = '';
   await saveAnnotation();
 }
 

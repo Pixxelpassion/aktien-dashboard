@@ -113,6 +113,12 @@ def init_db():
         except:
             pass
 
+        # Add report_url column if it doesn't exist
+        try:
+            db.execute("ALTER TABLE annotations ADD COLUMN report_url TEXT DEFAULT ''")
+        except:
+            pass
+
         db.executescript("""
         CREATE TABLE IF NOT EXISTS annotations (
             ticker            TEXT PRIMARY KEY,
@@ -125,6 +131,7 @@ def init_db():
             currency_override TEXT DEFAULT '',
             position_size     TEXT DEFAULT '',
             typical_drawdown  REAL,
+            report_url        TEXT DEFAULT '',
             updated_at        TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS metrics (
@@ -259,7 +266,7 @@ def api_portfolio():
                 h.ticker, h.name, h.isin, h.quantity, h.purchase_price,
                 h.current_price, h.current_value, h.total_return_pct, h.weight, h.synced_at,
                 h.portfolio_name,
-                a.stock_type, a.sector, a.country, a.buy_target, a.sell_target, a.notes, a.currency_override, a.position_size, a.typical_drawdown,
+                a.stock_type, a.sector, a.country, a.buy_target, a.sell_target, a.notes, a.currency_override, a.position_size, a.typical_drawdown, a.report_url,
                 m.avg_drawdown_pct, m.max_drawdown_pct, m.current_drawdown_pct,
                 m.return_15y_pct, m.return_15y_cagr
             FROM holdings h
@@ -296,8 +303,8 @@ def api_annotations(ticker: str):
     with get_db() as db:
         db.execute("""
             INSERT INTO annotations
-                (ticker, stock_type, sector, country, buy_target, sell_target, notes, currency_override, position_size, typical_drawdown, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))
+                (ticker, stock_type, sector, country, buy_target, sell_target, notes, currency_override, position_size, typical_drawdown, report_url, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
             ON CONFLICT(ticker) DO UPDATE SET
                 stock_type         = excluded.stock_type,
                 sector             = excluded.sector,
@@ -308,6 +315,7 @@ def api_annotations(ticker: str):
                 currency_override  = excluded.currency_override,
                 position_size      = excluded.position_size,
                 typical_drawdown   = excluded.typical_drawdown,
+                report_url         = excluded.report_url,
                 updated_at         = excluded.updated_at
         """, (
             ticker,
@@ -320,6 +328,7 @@ def api_annotations(ticker: str):
             data.get("currency_override", ""),
             data.get("position_size", ""),
             data.get("typical_drawdown") or None,
+            data.get("report_url", ""),
         ))
     return jsonify({"ok": True})
 
