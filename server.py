@@ -14,12 +14,19 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "portfolio.db"
-CONFIG_PATH = BASE_DIR / "config.json"
+# config.json liegt jetzt im data/-Ordner, damit es im Docker-Volume persistiert
+# und bei Updates (Rebuild) nicht verloren geht.
+CONFIG_PATH = DATA_DIR / "config.json"
+OLD_CONFIG_PATH = BASE_DIR / "config.json"  # alter Ort — nur zum Migrieren
 
 CLIENT_ID = "019c28d5-e0a0-703f-a790-10c15c2310ee"
 AUTH_ENDPOINT = "https://connect.parqet.com/oauth2/authorize"
 TOKEN_ENDPOINT = "https://connect.parqet.com/oauth2/token"
-REDIRECT_URI = "http://localhost:5000/oauth/callback"
+# Die Rücksprungadresse für den OAuth-Login. Parqets "Claude"-Integration
+# erlaubt nur localhost — der Login passiert daher immer lokal. Der Server
+# braucht keinen Login (er nutzt den refresh_token), kann den Wert aber per
+# Umgebungsvariable überschreiben.
+REDIRECT_URI = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:5000/oauth/callback")
 
 app = Flask(__name__, static_folder=str(BASE_DIR))
 app.secret_key = secrets.token_hex(32)
@@ -34,6 +41,11 @@ _pkce_store: dict[str, str] = {}  # state -> verifier
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    # Migration: alte config.json (im Hauptordner) einmalig übernehmen
+    if OLD_CONFIG_PATH.exists():
+        cfg = json.loads(OLD_CONFIG_PATH.read_text(encoding="utf-8"))
+        save_config(cfg)
+        return cfg
     return {
         "discord_webhook_url": "",
         "parqet_access_token": "",

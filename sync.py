@@ -13,13 +13,17 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = DATA_DIR / "portfolio.db"
-CONFIG_PATH = BASE_DIR / "config.json"
+# config.json liegt im data/-Ordner (persistiert im Docker-Volume).
+CONFIG_PATH = DATA_DIR / "config.json"
+OLD_CONFIG_PATH = BASE_DIR / "config.json"  # alter Ort — nur zum Migrieren
 MCP_BASE = "https://mcp.parqet.com"
 
 
 def load_config() -> dict:
     if CONFIG_PATH.exists():
         return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    if OLD_CONFIG_PATH.exists():
+        return json.loads(OLD_CONFIG_PATH.read_text(encoding="utf-8"))
     return {}
 
 
