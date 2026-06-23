@@ -675,10 +675,10 @@ async function loadStatus() {
       connectBtn.style.display = '';
       connText.textContent = '✗ Nicht verbunden';
     } else if (!s.token_valid) {
-      dot.className = 'sync-dot warn';
-      label.textContent = 'Token abgelaufen';
+      dot.className = 'sync-dot error';
+      label.textContent = 'Verbindung erneuern';
       connectBtn.style.display = '';
-      connText.textContent = '⚠ Token abgelaufen';
+      connText.textContent = '⚠ Verbindung erneuern nötig (lokal neu einloggen)';
     } else {
       setupBanner.style.display = 'none';
       connectBtn.style.display = 'none';

@@ -382,11 +382,14 @@ def refresh_token_if_needed(cfg: dict) -> dict:
         cfg["parqet_access_token"] = data.get("access_token", cfg["parqet_access_token"])
         cfg["parqet_refresh_token"] = data.get("refresh_token", refresh)
         cfg["parqet_token_expires_at"] = int(time.time()) + data.get("expires_in", 3600)
+        cfg["parqet_last_refresh_ok"] = True
         save_config(cfg)
         print("[OAuth] Token erneuert.")
     else:
         # Echte Auth-Fehler (Dauer-Schlüssel abgelaufen/ungültig) — Aktion nötig.
         print(f"[OAuth] Fehler beim Erneuern: {resp.status_code} {resp.text[:200]}")
+        cfg["parqet_last_refresh_ok"] = False
+        save_config(cfg)
         send_discord_message(
             webhook,
             "🔴 Parqet-Verbindung abgelaufen — Aktion nötig",

@@ -222,6 +222,7 @@ def oauth_callback():
     cfg["parqet_access_token"] = data.get("access_token", "")
     cfg["parqet_refresh_token"] = data.get("refresh_token", "")
     cfg["parqet_token_expires_at"] = int(time.time()) + data.get("expires_in", 3600)
+    cfg["parqet_last_refresh_ok"] = True
     save_config(cfg)
 
     return redirect("/?connected=1")
@@ -239,8 +240,13 @@ def index():
 @app.route("/api/status")
 def api_status():
     cfg = load_config()
-    connected = bool(cfg.get("parqet_access_token"))
-    token_valid = connected and time.time() < cfg.get("parqet_token_expires_at", 0) - 60
+    access = cfg.get("parqet_access_token", "")
+    refresh = cfg.get("parqet_refresh_token", "")
+    # "Verbunden" hängt am Dauer-Schlüssel (refresh_token), nicht am kurzlebigen
+    # Access-Token (läuft stündlich ab und wird beim Sync automatisch erneuert).
+    # Rot wird es nur, wenn die letzte automatische Erneuerung wirklich fehlschlug.
+    connected = bool(access or refresh)
+    token_valid = bool(refresh) and cfg.get("parqet_last_refresh_ok", True) is not False
 
     with get_db() as db:
         last_sync = db.execute("SELECT MAX(synced_at) AS t FROM holdings").fetchone()["t"]
