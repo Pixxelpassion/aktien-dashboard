@@ -363,9 +363,12 @@ def api_keepalive():
 @app.route("/api/alarms")
 def api_alarms():
     with get_db() as db:
-        rows = db.execute(
-            "SELECT * FROM alarm_log ORDER BY triggered_at DESC LIMIT 100"
-        ).fetchall()
+        rows = db.execute("""
+            SELECT al.*, h.name AS name
+            FROM alarm_log al
+            LEFT JOIN holdings h ON h.ticker = al.ticker
+            ORDER BY al.triggered_at DESC LIMIT 100
+        """).fetchall()
     return jsonify([dict(r) for r in rows])
 
 

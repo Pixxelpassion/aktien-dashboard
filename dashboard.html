@@ -1320,7 +1320,8 @@ async function openAlarms() {
       const label = a.alarm_type==='buy' ? '🟢 KAUF' : '🔴 VERK.';
       return `<div class="alarm-row">
         <span class="${typeCls}">${label}</span>
-        <span style="font-weight:700">${a.ticker}</span>
+        <span style="font-weight:700">${escHtml(a.name||a.ticker)}</span>
+        <span class="ticker-badge">${escHtml(a.ticker)}</span>
         <span style="color:var(--muted)">${fmtEur(a.price)}</span>
         <span style="margin-left:auto;color:var(--muted);font-size:.75rem">${dt}</span>
       </div>`;
