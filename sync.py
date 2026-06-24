@@ -526,7 +526,7 @@ def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: fl
     color = 0x22C55E if is_buy else 0xEF4444
     emoji = "🟢" if is_buy else "🔴"
     label = "KAUFSIGNAL" if is_buy else "VERKAUFSSIGNAL"
-    direction = "unter die Kaufmarke gefallen" if is_buy else "über die Verkaufsmarke gestiegen"
+    direction = "über die Kaufmarke gestiegen" if is_buy else "unter die Verkaufsmarke gefallen"
     display = name or ticker  # Name bevorzugen, ISIN/Ticker als Fallback
 
     payload = {
@@ -748,7 +748,7 @@ def run_sync():
             buy_t = row["buy_target"]
             sell_t = row["sell_target"]
 
-            if buy_t and price <= buy_t:
+            if buy_t and price >= buy_t:
                 already = db.execute(
                     "SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='buy' AND date(triggered_at)=?",
                     (ticker, today_str)
@@ -759,9 +759,9 @@ def run_sync():
                         (ticker, price)
                     )
                     send_discord_alert(discord_url, ticker, "buy", price, buy_t, name)
-                    print(f"[Alarm] KAUF  {ticker} Kurs={price:.2f} <= Marke={buy_t:.2f}")
+                    print(f"[Alarm] KAUF  {ticker} Kurs={price:.2f} >= Marke={buy_t:.2f}")
 
-            if sell_t and price >= sell_t:
+            if sell_t and price <= sell_t:
                 already = db.execute(
                     "SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='sell' AND date(triggered_at)=?",
                     (ticker, today_str)
@@ -772,7 +772,7 @@ def run_sync():
                         (ticker, price)
                     )
                     send_discord_alert(discord_url, ticker, "sell", price, sell_t, name)
-                    print(f"[Alarm] VERK  {ticker} Kurs={price:.2f} >= Marke={sell_t:.2f}")
+                    print(f"[Alarm] VERK  {ticker} Kurs={price:.2f} <= Marke={sell_t:.2f}")
 
     print(f"[Sync] Abgeschlossen: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return True

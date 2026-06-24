@@ -461,11 +461,11 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
 
     <div class="target-row">
       <div class="form-group">
-        <label>Kaufmarke (≤ → Alarm) <span id="buy-curr" style="color:var(--accent);font-weight:700"></span></label>
+        <label>Kaufmarke (≥ → Alarm) <span id="buy-curr" style="color:var(--accent);font-weight:700"></span></label>
         <input class="form-input" type="number" id="edit-buy" step="0.01" placeholder="z.B. 145.00">
       </div>
       <div class="form-group">
-        <label>Verkaufmarke (≥ → Alarm) <span id="sell-curr" style="color:var(--accent);font-weight:700"></span></label>
+        <label>Verkaufmarke (≤ → Alarm) <span id="sell-curr" style="color:var(--accent);font-weight:700"></span></label>
         <input class="form-input" type="number" id="edit-sell" step="0.01" placeholder="z.B. 210.00">
       </div>
     </div>
@@ -928,8 +928,9 @@ function renderTable() {
     const typeBadge = h.stock_type ? typeHtml(h.stock_type) : '<span class="badge badge-empty">—</span>';
     const ddHtml = drawdownBarHtml(h.current_drawdown_pct, h.typical_drawdown);
     const cagrCls = h.return_15y_cagr != null ? colorPct(h.return_15y_cagr) : 'neu';
-    const buyStatus = h.buy_target && h.current_price <= h.buy_target ? '🟢' : '';
-    const sellStatus = h.sell_target && h.current_price >= h.sell_target ? '🔴' : '';
+    // Stop-Loss/Ausbruch-Logik: Kauf bei Kurs >= Kaufmarke, Verkauf bei Kurs <= Verkaufmarke
+    const buyStatus = h.buy_target && h.current_price >= h.buy_target ? '🟢' : '';
+    const sellStatus = h.sell_target && h.current_price <= h.sell_target ? '🔴' : '';
 
     const curr = getCurrency(h.isin, h.currency_override);
     const currLabel = getCurrencyLabel(h.isin, h.currency_override);
