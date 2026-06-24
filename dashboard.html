@@ -461,11 +461,11 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
 
     <div class="target-row">
       <div class="form-group">
-        <label>Kaufmarke (≤ → Alarm)</label>
+        <label>Kaufmarke (≤ → Alarm) <span id="buy-curr" style="color:var(--accent);font-weight:700"></span></label>
         <input class="form-input" type="number" id="edit-buy" step="0.01" placeholder="z.B. 145.00">
       </div>
       <div class="form-group">
-        <label>Verkaufmarke (≥ → Alarm)</label>
+        <label>Verkaufmarke (≥ → Alarm) <span id="sell-curr" style="color:var(--accent);font-weight:700"></span></label>
         <input class="form-input" type="number" id="edit-sell" step="0.01" placeholder="z.B. 210.00">
       </div>
     </div>
@@ -1171,8 +1171,13 @@ async function openEditPanel(ticker) {
   document.getElementById('edit-type').value   = h.stock_type || '';
   document.getElementById('edit-sector').value = h.sector || '';
   document.getElementById('edit-country').value = h.country || '';
-  document.getElementById('edit-buy').value    = h.buy_target != null ? h.buy_target : '';
-  document.getElementById('edit-sell').value   = h.sell_target != null ? h.sell_target : '';
+  // Marken werden in EUR gespeichert; im Original-Modus zur Eingabe umrechnen.
+  const tgtRate = showOriginalCurrency ? getExchangeRate(h.isin, h.currency_override) : 1;
+  const tgtCurr = getCurrencyLabel(h.isin, h.currency_override);
+  document.getElementById('edit-buy').value    = h.buy_target  != null ? +(h.buy_target  * tgtRate).toFixed(2) : '';
+  document.getElementById('edit-sell').value   = h.sell_target != null ? +(h.sell_target * tgtRate).toFixed(2) : '';
+  document.getElementById('buy-curr').textContent  = tgtCurr;
+  document.getElementById('sell-curr').textContent = tgtCurr;
   document.getElementById('edit-notes').value  = h.notes || '';
   document.getElementById('edit-currency').value = h.currency_override || '';
   document.getElementById('edit-position-size').value = h.position_size || '';
@@ -1198,13 +1203,19 @@ async function saveAnnotation() {
   const buy  = document.getElementById('edit-buy').value;
   const sell = document.getElementById('edit-sell').value;
 
+  // Eingabe erfolgt in der aktuell angezeigten Währung -> für die Speicherung
+  // nach EUR zurückrechnen (Rate anhand der ggf. gewählten Währungs-Override).
+  const ovr = document.getElementById('edit-currency').value || '';
+  const editH = allHoldings.find(x => x.ticker === editTicker);
+  const tgtRate = (showOriginalCurrency && editH) ? getExchangeRate(editH.isin, ovr) : 1;
+
   const typicalDd = document.getElementById('edit-typical-dd').value;
   const body = {
     stock_type:        document.getElementById('edit-type').value,
     sector:            document.getElementById('edit-sector').value,
     country:           document.getElementById('edit-country').value,
-    buy_target:        buy  ? parseFloat(buy)  : null,
-    sell_target:       sell ? parseFloat(sell) : null,
+    buy_target:        buy  ? parseFloat(buy)  / tgtRate : null,
+    sell_target:       sell ? parseFloat(sell) / tgtRate : null,
     notes:             document.getElementById('edit-notes').value,
     currency_override: document.getElementById('edit-currency').value || '',
     position_size:     document.getElementById('edit-position-size').value || '',
