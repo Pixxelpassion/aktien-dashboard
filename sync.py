@@ -519,7 +519,7 @@ def calc_15y_return(prices: list[dict]) -> dict:
 # Discord
 # ---------------------------------------------------------------------------
 
-def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: float, target: float):
+def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: float, target: float, name: str = ""):
     if not webhook_url:
         return
     is_buy = alarm_type == "buy"
@@ -527,15 +527,17 @@ def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: fl
     emoji = "🟢" if is_buy else "🔴"
     label = "KAUFSIGNAL" if is_buy else "VERKAUFSSIGNAL"
     direction = "unter die Kaufmarke gefallen" if is_buy else "über die Verkaufsmarke gestiegen"
+    display = name or ticker  # Name bevorzugen, ISIN/Ticker als Fallback
 
     payload = {
         "embeds": [{
-            "title": f"{emoji} {label}: {ticker}",
-            "description": f"**{ticker}** ist {direction}.",
+            "title": f"{emoji} {label}: {display}",
+            "description": f"**{display}** ist {direction}.",
             "color": color,
             "fields": [
                 {"name": "Aktueller Kurs", "value": f"{price:.2f} €", "inline": True},
                 {"name": "Zielmarke", "value": f"{target:.2f} €", "inline": True},
+                {"name": "ISIN/Ticker", "value": ticker, "inline": True},
             ],
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
             "footer": {"text": "Parqet Dashboard · Automatischer Alarm"},
@@ -733,7 +735,7 @@ def run_sync():
 
     with get_db() as db:
         rows = db.execute("""
-            SELECT h.ticker, h.current_price, a.buy_target, a.sell_target
+            SELECT h.ticker, h.name, h.current_price, a.buy_target, a.sell_target
             FROM holdings h
             JOIN annotations a ON h.ticker = a.ticker
             WHERE a.buy_target IS NOT NULL OR a.sell_target IS NOT NULL
@@ -741,6 +743,7 @@ def run_sync():
 
         for row in rows:
             ticker = row["ticker"]
+            name = row["name"] or ticker
             price = row["current_price"] or 0.0
             buy_t = row["buy_target"]
             sell_t = row["sell_target"]
@@ -755,7 +758,7 @@ def run_sync():
                         "INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'buy', ?)",
                         (ticker, price)
                     )
-                    send_discord_alert(discord_url, ticker, "buy", price, buy_t)
+                    send_discord_alert(discord_url, ticker, "buy", price, buy_t, name)
                     print(f"[Alarm] KAUF  {ticker} Kurs={price:.2f} <= Marke={buy_t:.2f}")
 
             if sell_t and price >= sell_t:
@@ -768,7 +771,7 @@ def run_sync():
                         "INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'sell', ?)",
                         (ticker, price)
                     )
-                    send_discord_alert(discord_url, ticker, "sell", price, sell_t)
+                    send_discord_alert(discord_url, ticker, "sell", price, sell_t, name)
                     print(f"[Alarm] VERK  {ticker} Kurs={price:.2f} >= Marke={sell_t:.2f}")
 
     print(f"[Sync] Abgeschlossen: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
