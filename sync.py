@@ -424,7 +424,10 @@ def refresh_token_if_needed(cfg: dict, force: bool = False) -> dict:
 def _yahoo_history(ticker: str, years: int = 16) -> list[dict]:
     try:
         t = yf.Ticker(ticker)
-        hist = t.history(period=f"{years}y", interval="1mo", auto_adjust=True)
+        # auto_adjust=False -> "Close" ist nur split-bereinigt (Dividenden NICHT
+        # herausgerechnet) = der tatsächliche Kurs von damals. So entspricht die
+        # 15J-Rendite dem Kursvergleich ("wo stand die Aktie") statt Total Return.
+        hist = t.history(period=f"{years}y", interval="1mo", auto_adjust=False)
         if hist.empty:
             return []
         return [
