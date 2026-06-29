@@ -534,7 +534,9 @@ def calc_15y_return(prices: list[dict]) -> dict:
 
     sorted_prices = sorted(prices, key=lambda x: x["date"])
     today = datetime.date.today()
-    target_date = today.replace(year=today.year - 15)
+    # "vor 15 Jahren" = derselbe Kalendermonat vor 15 Jahren (Monats-Bar dieses Monats),
+    # nicht der erste Monat danach — sonst springt der Startpunkt einen Monat zu weit.
+    target_date = datetime.date(today.year - 15, today.month, 1)
 
     start_entry = None
     actual_years = 15.0
