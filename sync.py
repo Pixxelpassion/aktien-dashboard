@@ -702,10 +702,10 @@ def sync_watchlist():
             db.execute("""
                 UPDATE watchlist SET current_price=?, currency=COALESCE(NULLIF(?,''), currency),
                     avg_drawdown_pct=?, max_drawdown_pct=?, current_drawdown_pct=?,
-                    return_15y_cagr=?, synced_at=datetime('now')
+                    return_15y_cagr=?, return_15y_pct=?, synced_at=datetime('now')
                 WHERE symbol=?
             """, (price or 0, curr, dd["avg_drawdown_pct"], dd["max_drawdown_pct"],
-                  dd["current_drawdown_pct"], ret["return_15y_cagr"], symbol))
+                  dd["current_drawdown_pct"], ret["return_15y_cagr"], ret["return_15y_pct"], symbol))
 
             row = db.execute("SELECT buy_target, sell_target, currency FROM watchlist WHERE symbol=?", (symbol,)).fetchone()
             buy_t, sell_t = row["buy_target"], row["sell_target"]

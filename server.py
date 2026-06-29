@@ -185,9 +185,15 @@ def init_db():
             max_drawdown_pct     REAL,
             current_drawdown_pct REAL,
             return_15y_cagr      REAL,
+            return_15y_pct       REAL,
             synced_at            TEXT DEFAULT (datetime('now'))
         );
         """)
+        # watchlist: return_15y_pct nachrüsten (bestehende DBs)
+        try:
+            db.execute("ALTER TABLE watchlist ADD COLUMN return_15y_pct REAL")
+        except:
+            pass
 
 
 init_db()

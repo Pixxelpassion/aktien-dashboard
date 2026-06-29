@@ -377,6 +377,9 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
             <th data-col="return_15y_cagr" style="text-align:right;cursor:pointer" onclick="sort('return_15y_cagr')">
               15J p.a. <span id="sort-indicator-return_15y_cagr" class="sort-indicator"></span>
             </th>
+            <th data-col="return_15y_pct" style="text-align:right;cursor:pointer" onclick="sort('return_15y_pct')">
+              15J gesamt <span id="sort-indicator-return_15y_pct" class="sort-indicator"></span>
+            </th>
           </tr>
         </thead>
         <tbody id="holdings-tbody">
@@ -909,6 +912,7 @@ const COLUMNS = [
   {key:'sell_target',          label:'Verkaufsmarke'},
   {key:'current_drawdown_pct', label:'DD vs. Typ'},
   {key:'return_15y_cagr',      label:'15J p.a.'},
+  {key:'return_15y_pct',       label:'15J gesamt'},
 ];
 // "Name" ist bewusst nicht abwählbar (Zeilen-Identität)
 
@@ -1030,6 +1034,7 @@ function renderTable() {
       <td data-col="sell_target" style="text-align:right;font-size:.8rem">${sellCell}</td>
       <td data-col="current_drawdown_pct">${ddHtml}</td>
       <td data-col="return_15y_cagr" style="text-align:right"><span class="${cagrCls}">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</span></td>
+      <td data-col="return_15y_pct" style="text-align:right"><span class="${h.return_15y_pct!=null?colorPct(h.return_15y_pct):'neu'}">${h.return_15y_pct!=null ? fmtPct(h.return_15y_pct) : '—'}</span></td>
     </tr>`;
   }).join('');
 
