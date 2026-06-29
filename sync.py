@@ -421,7 +421,7 @@ def refresh_token_if_needed(cfg: dict, force: bool = False) -> dict:
 # Yahoo Finance — historische Daten
 # ---------------------------------------------------------------------------
 
-def fetch_price_history(ticker: str, years: int = 16) -> list[dict]:
+def _yahoo_history(ticker: str, years: int = 16) -> list[dict]:
     try:
         t = yf.Ticker(ticker)
         hist = t.history(period=f"{years}y", interval="1mo", auto_adjust=True)
@@ -435,6 +435,54 @@ def fetch_price_history(ticker: str, years: int = 16) -> list[dict]:
     except Exception as e:
         print(f"[Yahoo] Fehler bei {ticker}: {e}")
         return []
+
+
+def _looks_like_isin(s: str) -> bool:
+    return bool(s) and len(s) == 12 and s[:2].isalpha() and s[2:].isalnum()
+
+
+def _openfigi_ticker(isin: str) -> str | None:
+    """ISIN -> Yahoo-Ticker via OpenFIGI (kostenlos). US-Notierung bevorzugt."""
+    try:
+        r = http.post("https://api.openfigi.com/v3/mapping",
+                      json=[{"idType": "ID_ISIN", "idValue": isin}], timeout=12)
+        if r.status_code == 200:
+            data = r.json()
+            entries = data[0].get("data") if (data and isinstance(data, list) and data[0]) else None
+            if entries:
+                us = [e for e in entries if e.get("exchCode") == "US" and e.get("ticker")]
+                pick = us[0] if us else entries[0]
+                return pick.get("ticker")
+    except Exception as e:
+        print(f"[OpenFIGI] Fehler {isin}: {e}")
+    return None
+
+
+def _resolve_symbol(isin: str) -> str | None:
+    """Gecachte ISIN->Symbol-Auflösung (symbol_cache-Tabelle)."""
+    with get_db() as db:
+        row = db.execute("SELECT symbol FROM symbol_cache WHERE isin=?", (isin,)).fetchone()
+        if row:
+            return row["symbol"] or None
+    sym = _openfigi_ticker(isin)
+    if sym:
+        with get_db() as db:
+            db.execute("INSERT OR REPLACE INTO symbol_cache (isin, symbol, updated_at) VALUES (?,?,datetime('now'))",
+                       (isin, sym))
+    return sym
+
+
+def fetch_price_history(ticker: str, years: int = 16) -> list[dict]:
+    prices = _yahoo_history(ticker, years)
+    if prices:
+        return prices
+    # Yahoo kennt die ISIN nicht -> via OpenFIGI das Symbol auflösen (gecacht) und erneut versuchen
+    if _looks_like_isin(ticker):
+        sym = _resolve_symbol(ticker)
+        if sym and sym != ticker:
+            print(f"[Yahoo] {ticker} -> {sym} (OpenFIGI)")
+            return _yahoo_history(sym, years)
+    return prices
 
 
 def calc_drawdown_metrics(prices: list[dict]) -> dict:

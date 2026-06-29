@@ -167,6 +167,11 @@ def init_db():
             rate         REAL,
             updated_at   TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS symbol_cache (
+            isin       TEXT PRIMARY KEY,
+            symbol     TEXT,
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS watchlist (
             symbol               TEXT PRIMARY KEY,
             name                 TEXT DEFAULT '',
