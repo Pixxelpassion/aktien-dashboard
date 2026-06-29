@@ -519,7 +519,29 @@ def calc_15y_return(prices: list[dict]) -> dict:
 # Discord
 # ---------------------------------------------------------------------------
 
-def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: float, target: float, name: str = ""):
+# ISIN-Prefix → Währung (wie im Frontend), und Symbol-Map
+CURRENCY_MAP = {
+    'US':'USD','DK':'DKK','DE':'EUR','FR':'EUR','NL':'EUR','GB':'GBP','SE':'SEK',
+    'CH':'CHF','JP':'JPY','HK':'HKD','SG':'SGD','CA':'CAD','AU':'AUD','KY':'USD',
+    'IE':'EUR','BM':'USD','CN':'CNY','KR':'KRW','BR':'BRL','IN':'INR',
+}
+CURRENCY_SYMBOLS = {'USD':'$','DKK':'kr','GBP':'£','SEK':'kr','CHF':'CHF','JPY':'¥',
+                    'CNY':'¥','INR':'₹','EUR':'€','HKD':'HK$','SGD':'S$','CAD':'C$',
+                    'AUD':'A$','KRW':'₩','BRL':'R$'}
+
+def currency_for(isin: str, override: str = "") -> str:
+    if override:
+        return override.upper()
+    if not isin or len(isin) < 2:
+        return 'USD'
+    return CURRENCY_MAP.get(isin[:2].upper(), 'USD')
+
+def currency_symbol(code: str) -> str:
+    return CURRENCY_SYMBOLS.get((code or '').upper(), code or '')
+
+
+def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: float, target: float, name: str = "", currency: str = "€"):
+    """price/target sind bereits in der anzuzeigenden Währung; `currency` ist das Symbol."""
     if not webhook_url:
         return
     is_buy = alarm_type == "buy"
@@ -535,8 +557,8 @@ def send_discord_alert(webhook_url: str, ticker: str, alarm_type: str, price: fl
             "description": f"**{display}** ist {direction}.",
             "color": color,
             "fields": [
-                {"name": "Aktueller Kurs", "value": f"{price:.2f} €", "inline": True},
-                {"name": "Zielmarke", "value": f"{target:.2f} €", "inline": True},
+                {"name": "Aktueller Kurs", "value": f"{price:.2f} {currency}", "inline": True},
+                {"name": "Zielmarke", "value": f"{target:.2f} {currency}", "inline": True},
                 {"name": "ISIN/Ticker", "value": ticker, "inline": True},
             ],
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
@@ -685,22 +707,27 @@ def sync_watchlist():
             """, (price or 0, curr, dd["avg_drawdown_pct"], dd["max_drawdown_pct"],
                   dd["current_drawdown_pct"], ret["return_15y_cagr"], symbol))
 
-            row = db.execute("SELECT buy_target, sell_target FROM watchlist WHERE symbol=?", (symbol,)).fetchone()
+            row = db.execute("SELECT buy_target, sell_target, currency FROM watchlist WHERE symbol=?", (symbol,)).fetchone()
             buy_t, sell_t = row["buy_target"], row["sell_target"]
             p = price or 0
+            # Watchlist-Kurse sind bereits nativ -> keine Umrechnung, nur Währungssymbol
+            wcurr = row["currency"] or ""
+            sym = currency_symbol(wcurr) or wcurr or "€"
 
             # Stop-Loss/Ausbruch-Logik (wie im Portfolio)
             if buy_t and p >= buy_t:
                 if not db.execute("SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='buy' AND date(triggered_at)=?",
                                   (symbol, today_str)).fetchone():
-                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'buy', ?)", (symbol, p))
-                    send_discord_alert(discord_url, symbol, "buy", p, buy_t, disp_name)
+                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price, currency, display_price) VALUES (?, 'buy', ?, ?, ?)",
+                               (symbol, p, wcurr, p))
+                    send_discord_alert(discord_url, symbol, "buy", p, buy_t, disp_name, sym)
                     print(f"[Watchlist-Alarm] KAUF {symbol} {p:.2f} >= {buy_t:.2f}")
             if sell_t and p <= sell_t:
                 if not db.execute("SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='sell' AND date(triggered_at)=?",
                                   (symbol, today_str)).fetchone():
-                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'sell', ?)", (symbol, p))
-                    send_discord_alert(discord_url, symbol, "sell", p, sell_t, disp_name)
+                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price, currency, display_price) VALUES (?, 'sell', ?, ?, ?)",
+                               (symbol, p, wcurr, p))
+                    send_discord_alert(discord_url, symbol, "sell", p, sell_t, disp_name, sym)
                     print(f"[Watchlist-Alarm] VERK {symbol} {p:.2f} <= {sell_t:.2f}")
     print("[Watchlist] fertig.")
 
@@ -805,8 +832,11 @@ def run_sync():
     today_str = datetime.date.today().isoformat()
 
     with get_db() as db:
+        rates = {r["currency"]: r["rate"] for r in
+                 db.execute("SELECT currency, rate FROM exchange_rates").fetchall()}
         rows = db.execute("""
-            SELECT h.ticker, h.name, h.current_price, a.buy_target, a.sell_target
+            SELECT h.ticker, h.name, h.isin, h.current_price,
+                   a.buy_target, a.sell_target, a.currency_override
             FROM holdings h
             JOIN annotations a ON h.ticker = a.ticker
             WHERE a.buy_target IS NOT NULL OR a.sell_target IS NOT NULL
@@ -818,32 +848,26 @@ def run_sync():
             price = row["current_price"] or 0.0
             buy_t = row["buy_target"]
             sell_t = row["sell_target"]
+            # Preise in Originalwährung umrechnen (wie im Dashboard): EUR * Kurs
+            curr = currency_for(row["isin"], row["currency_override"] or "")
+            rate = rates.get(curr, 1.0)
+            sym = currency_symbol(curr)
 
             if buy_t and price >= buy_t:
-                already = db.execute(
-                    "SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='buy' AND date(triggered_at)=?",
-                    (ticker, today_str)
-                ).fetchone()
-                if not already:
-                    db.execute(
-                        "INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'buy', ?)",
-                        (ticker, price)
-                    )
-                    send_discord_alert(discord_url, ticker, "buy", price, buy_t, name)
-                    print(f"[Alarm] KAUF  {ticker} Kurs={price:.2f} >= Marke={buy_t:.2f}")
+                if not db.execute("SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='buy' AND date(triggered_at)=?",
+                                  (ticker, today_str)).fetchone():
+                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price, currency, display_price) VALUES (?, 'buy', ?, ?, ?)",
+                               (ticker, price, curr, price * rate))
+                    send_discord_alert(discord_url, ticker, "buy", price * rate, buy_t * rate, name, sym)
+                    print(f"[Alarm] KAUF  {ticker} {price:.2f} >= {buy_t:.2f}")
 
             if sell_t and price <= sell_t:
-                already = db.execute(
-                    "SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='sell' AND date(triggered_at)=?",
-                    (ticker, today_str)
-                ).fetchone()
-                if not already:
-                    db.execute(
-                        "INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'sell', ?)",
-                        (ticker, price)
-                    )
-                    send_discord_alert(discord_url, ticker, "sell", price, sell_t, name)
-                    print(f"[Alarm] VERK  {ticker} Kurs={price:.2f} <= Marke={sell_t:.2f}")
+                if not db.execute("SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='sell' AND date(triggered_at)=?",
+                                  (ticker, today_str)).fetchone():
+                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price, currency, display_price) VALUES (?, 'sell', ?, ?, ?)",
+                               (ticker, price, curr, price * rate))
+                    send_discord_alert(discord_url, ticker, "sell", price * rate, sell_t * rate, name, sym)
+                    print(f"[Alarm] VERK  {ticker} {price:.2f} <= {sell_t:.2f}")
 
     # --- Step 5: Watchlist aktualisieren (eigene Werte, unabhängig von Parqet) ---
     try:

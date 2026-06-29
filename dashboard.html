@@ -247,7 +247,7 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
   <!-- Currency Toggle -->
   <div style="display:flex;justify-content:flex-end;gap:1rem;margin-bottom:1.25rem;align-items:center">
     <button class="btn btn-outline btn-sm" id="currency-toggle" onclick="toggleCurrency()">
-      💱 Anzeige: <span id="currency-label">EUR</span>
+      💱 Anzeige: <span id="currency-label">Original</span>
     </button>
   </div>
 
@@ -602,9 +602,9 @@ let editTicker = null;
 let sectorChart = null;
 let allocDimension = "sector";   // sector | type | country
 let currentPortfolio = "all";
-let sortBy = "current_value";
-let sortOrder = "desc";
-let showOriginalCurrency = false;
+let sortBy = "name";
+let sortOrder = "asc";
+let showOriginalCurrency = true;
 let exchangeRates = {};
 
 // Currency mapping: ISIN-Prefix → Währung (Rate wird vom Server geladen)
@@ -723,11 +723,19 @@ async function loadPortfolio() {
       if (Array.isArray(wl)) allHoldings = allHoldings.concat(wl);
     } catch(e) { console.error('Watchlist-Fehler:', e); }
     buildPortfolioTabs();
-    currentPortfolio = 'all';
-    document.querySelector('[data-portfolio="all"]').classList.add('active');
-    renderSummary();
-    renderTable();
-    renderCharts();
+    // Standard-Tab: "Aktien" wenn vorhanden, sonst "Alle Portfolios"
+    const aktienTab = [...document.querySelectorAll('.tab-btn')]
+      .map(b => b.dataset.portfolio)
+      .find(p => p && p.includes('Aktien'));
+    if (aktienTab) {
+      switchPortfolio(aktienTab);
+    } else {
+      currentPortfolio = 'all';
+      document.querySelector('[data-portfolio="all"]').classList.add('active');
+      renderSummary();
+      renderTable();
+      renderCharts();
+    }
   } catch(e) {
     console.error('Portfolio-Fehler:', e);
     document.getElementById('holdings-tbody').innerHTML =
@@ -1395,11 +1403,15 @@ async function openAlarms() {
       const dt = d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
       const typeCls = a.alarm_type==='buy' ? 'alarm-type-buy' : 'alarm-type-sell';
       const label = a.alarm_type==='buy' ? '🟢 KAUF' : '🔴 VERK.';
+      // Preis in Originalwährung (falls beim Auslösen gespeichert), sonst EUR
+      const priceStr = (a.display_price != null && a.currency)
+        ? `${currencySymbol(a.currency)} ${fmt(a.display_price)}`
+        : fmtEur(a.price);
       return `<div class="alarm-row">
         <span class="${typeCls}">${label}</span>
         <span style="font-weight:700">${escHtml(a.name||a.ticker)}</span>
         <span class="ticker-badge">${escHtml(a.ticker)}</span>
-        <span style="color:var(--muted)">${fmtEur(a.price)}</span>
+        <span style="color:var(--muted)">${priceStr}</span>
         <span style="margin-left:auto;color:var(--muted);font-size:.75rem">${dt}</span>
       </div>`;
     }).join('');

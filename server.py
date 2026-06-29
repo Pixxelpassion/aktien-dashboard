@@ -119,6 +119,16 @@ def init_db():
         except:
             pass
 
+        # alarm_log: Währung + Anzeigepreis (Originalwährung) für bestehende DBs
+        try:
+            db.execute("ALTER TABLE alarm_log ADD COLUMN currency TEXT DEFAULT ''")
+        except:
+            pass
+        try:
+            db.execute("ALTER TABLE alarm_log ADD COLUMN display_price REAL")
+        except:
+            pass
+
         db.executescript("""
         CREATE TABLE IF NOT EXISTS annotations (
             ticker            TEXT PRIMARY KEY,
@@ -144,11 +154,13 @@ def init_db():
             computed_at          TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS alarm_log (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticker       TEXT,
-            alarm_type   TEXT,
-            price        REAL,
-            triggered_at TEXT DEFAULT (datetime('now'))
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker        TEXT,
+            alarm_type    TEXT,
+            price         REAL,
+            currency      TEXT DEFAULT '',
+            display_price REAL,
+            triggered_at  TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS exchange_rates (
             currency     TEXT PRIMARY KEY,
