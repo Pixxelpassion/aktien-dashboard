@@ -196,7 +196,38 @@ def init_db():
             pass
 
 
+def _backfill_alarm_currency():
+    """Alte Alarm-Einträge (ohne Währung) einmalig in Originalwährung umrechnen."""
+    try:
+        from sync import currency_for
+        with get_db() as db:
+            rows = db.execute("SELECT id, ticker, price FROM alarm_log WHERE display_price IS NULL").fetchall()
+            if not rows:
+                return
+            rates = {r["currency"]: r["rate"] for r in
+                     db.execute("SELECT currency, rate FROM exchange_rates").fetchall()}
+            for r in rows:
+                ticker = r["ticker"]
+                w = db.execute("SELECT currency FROM watchlist WHERE symbol=?", (ticker,)).fetchone()
+                if w:
+                    curr = w["currency"] or ""
+                    disp = r["price"]  # Watchlist: bereits nativ
+                else:
+                    h = db.execute("SELECT isin FROM holdings WHERE ticker=?", (ticker,)).fetchone()
+                    a = db.execute("SELECT currency_override FROM annotations WHERE ticker=?", (ticker,)).fetchone()
+                    isin = (h["isin"] if h else "") or ""
+                    override = (a["currency_override"] if a else "") or ""
+                    curr = currency_for(isin, override)
+                    disp = (r["price"] or 0) * rates.get(curr, 1.0)
+                db.execute("UPDATE alarm_log SET currency=?, display_price=? WHERE id=?",
+                           (curr, disp, r["id"]))
+            print(f"[Migration] {len(rows)} alte Alarme in Originalwährung umgerechnet.")
+    except Exception as e:
+        print(f"[Migration] Backfill übersprungen: {e}")
+
+
 init_db()
+_backfill_alarm_currency()
 
 
 # ---------------------------------------------------------------------------
