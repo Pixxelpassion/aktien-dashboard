@@ -778,7 +778,7 @@ function buildPortfolioTabs() {
   }
   const WL = '👀 Watchlist';
   const sorted = Array.from(portfolios).filter(p => p !== WL).sort();
-  if (portfolios.has(WL)) sorted.push(WL);   // Watchlist immer ganz hinten
+  sorted.push(WL);   // Watchlist-Tab immer anzeigen (auch wenn leer) — sonst kein Weg zum Hinzufügen
   console.log('Found portfolios:', sorted);
 
   const container = document.getElementById('portfolio-tabs');
