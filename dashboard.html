@@ -107,7 +107,7 @@ tbody tr:last-child{border-bottom:none}
 td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
 .ticker-badge{display:inline-block;background:var(--accent-light);color:var(--accent);font-weight:700;font-size:.72rem;padding:.15rem .4rem;border-radius:5px;margin-left:.4rem}
 .name-cell{max-width:180px;overflow:hidden;text-overflow:ellipsis}
-.name-link{color:var(--pp-teal);font-weight:600;text-decoration:none}
+.name-link{color:var(--pp-teal);font-weight:400;text-decoration:none}
 .name-link:hover{text-decoration:underline}
 .name-link .link-arrow{font-size:.7rem;opacity:.7}
 .val-pos{color:var(--green);font-weight:600}
@@ -212,6 +212,11 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
   .cards-row{grid-template-columns:1fr 1fr}
 }
 .hidden{display:none!important}
+
+/* === Design: eckige Ecken + ruhiges, einheitliches Tabellenbild === */
+*{border-radius:0 !important}
+tbody td{font-size:.85rem;font-weight:400}
+tbody td .ticker-badge{font-weight:400}
 </style>
 </head>
 <body>
@@ -1024,17 +1029,17 @@ function renderTable() {
         ${currTag}
       </td>
       <td data-col="purchase_price" style="text-align:right">${ppCell}</td>
-      <td data-col="current_price" style="text-align:right;font-weight:600">${currLabel} ${fmt(cp)}</td>
-      <td data-col="current_value" style="text-align:right;font-weight:700">${cvCell}</td>
+      <td data-col="current_price" style="text-align:right">${currLabel} ${fmt(cp)}</td>
+      <td data-col="current_value" style="text-align:right">${cvCell}</td>
       <td data-col="total_return_pct" style="text-align:right">${retCell}</td>
       <td data-col="stock_type">${typeBadge}</td>
-      <td data-col="sector" style="color:var(--muted);font-size:.78rem">${h.sector ? sectorIcon(h.sector)+' '+h.sector : '—'}</td>
-      <td data-col="country" style="color:var(--muted);font-size:.78rem">${h.country ? countryFlag(h.country)+' '+h.country : '—'}</td>
-      <td data-col="buy_target" style="text-align:right;font-size:.8rem">${buyCell}</td>
-      <td data-col="sell_target" style="text-align:right;font-size:.8rem">${sellCell}</td>
+      <td data-col="sector" style="color:var(--muted)">${h.sector || '—'}</td>
+      <td data-col="country" style="color:var(--muted)">${h.country || '—'}</td>
+      <td data-col="buy_target" style="text-align:right">${buyCell}</td>
+      <td data-col="sell_target" style="text-align:right">${sellCell}</td>
       <td data-col="current_drawdown_pct">${ddHtml}</td>
-      <td data-col="return_15y_cagr" style="text-align:right"><span class="${cagrCls}">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</span></td>
-      <td data-col="return_15y_pct" style="text-align:right"><span class="${h.return_15y_pct!=null?colorPct(h.return_15y_pct):'neu'}">${h.return_15y_pct!=null ? fmtPct(h.return_15y_pct) : '—'}</span></td>
+      <td data-col="return_15y_cagr" style="text-align:right">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</td>
+      <td data-col="return_15y_pct" style="text-align:right">${h.return_15y_pct!=null ? fmtPct(h.return_15y_pct) : '—'}</td>
     </tr>`;
   }).join('');
 
@@ -1058,11 +1063,11 @@ function reportLinkHtml(h) {
   if (/^https?:\/\//i.test(url)) {
     return `<a href="${escAttr(url)}" target="_blank" rel="noopener" class="name-link" title="Aktienreport öffnen" onclick="event.stopPropagation()">${name} <span class="link-arrow">↗</span></a>`;
   }
-  return `<span style="font-weight:600">${name}</span>`;
+  return `<span>${name}</span>`;
 }
 
 function typeHtml(t) {
-  const map = {growth:'📈 Wachstum',dividend:'💰 Dividende',cashflow:'🔄 Cashflow'};
+  const map = {growth:'Wachstum',dividend:'Dividende',cashflow:'Cashflow'};
   const cls = {growth:'badge-growth',dividend:'badge-dividend',cashflow:'badge-cashflow'};
   return `<span class="badge ${cls[t]||''}">${map[t]||t}</span>`;
 }
