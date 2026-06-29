@@ -155,6 +155,26 @@ def init_db():
             rate         REAL,
             updated_at   TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS watchlist (
+            symbol               TEXT PRIMARY KEY,
+            name                 TEXT DEFAULT '',
+            isin                 TEXT DEFAULT '',
+            current_price        REAL DEFAULT 0,
+            currency             TEXT DEFAULT '',
+            stock_type           TEXT DEFAULT '',
+            sector               TEXT DEFAULT '',
+            country              TEXT DEFAULT '',
+            buy_target           REAL,
+            sell_target          REAL,
+            notes                TEXT DEFAULT '',
+            report_url           TEXT DEFAULT '',
+            typical_drawdown     REAL,
+            avg_drawdown_pct     REAL,
+            max_drawdown_pct     REAL,
+            current_drawdown_pct REAL,
+            return_15y_cagr      REAL,
+            synced_at            TEXT DEFAULT (datetime('now'))
+        );
         """)
 
 
@@ -364,12 +384,78 @@ def api_keepalive():
 def api_alarms():
     with get_db() as db:
         rows = db.execute("""
-            SELECT al.*, h.name AS name
+            SELECT al.*, COALESCE(h.name, w.name) AS name
             FROM alarm_log al
-            LEFT JOIN holdings h ON h.ticker = al.ticker
+            LEFT JOIN holdings  h ON h.ticker = al.ticker
+            LEFT JOIN watchlist w ON w.symbol = al.ticker
             ORDER BY al.triggered_at DESC LIMIT 100
         """).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/watchlist", methods=["GET", "POST"])
+def api_watchlist():
+    if request.method == "GET":
+        with get_db() as db:
+            rows = db.execute("SELECT * FROM watchlist ORDER BY name, symbol").fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            # In Holdings-Form bringen, damit das Frontend es wie eine Position rendern kann
+            d["ticker"] = d["symbol"]
+            d["portfolio_name"] = "👀 Watchlist"
+            d["is_watchlist"] = True
+            d["quantity"] = 0
+            d["purchase_price"] = None
+            d["current_value"] = None
+            d["total_return_pct"] = None
+            d["position_size"] = ""
+            d["currency_override"] = d.get("currency") or ""
+            out.append(d)
+        return jsonify(out)
+
+    # POST: neuen Wert hinzufügen
+    data = request.get_json(silent=True) or {}
+    symbol = (data.get("symbol") or "").strip().upper()
+    if not symbol:
+        return jsonify({"ok": False, "error": "Symbol fehlt"}), 400
+    name = (data.get("name") or "").strip()
+    with get_db() as db:
+        db.execute("INSERT OR IGNORE INTO watchlist (symbol, name) VALUES (?, ?)", (symbol, name))
+    # Kurs sofort holen, damit der Wert nicht leer dasteht
+    try:
+        from sync import fetch_current_quote
+        price, curr = fetch_current_quote(symbol)
+        with get_db() as db:
+            db.execute("UPDATE watchlist SET current_price=?, currency=COALESCE(NULLIF(?,''), currency) WHERE symbol=?",
+                       (price or 0, curr, symbol))
+    except Exception as e:
+        print(f"[Watchlist] Sofort-Kurs fehlgeschlagen: {e}")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/watchlist/<symbol>", methods=["POST", "DELETE"])
+def api_watchlist_item(symbol: str):
+    symbol = symbol.upper()
+    if request.method == "DELETE":
+        with get_db() as db:
+            db.execute("DELETE FROM watchlist WHERE symbol = ?", (symbol,))
+        return jsonify({"ok": True})
+
+    data = request.get_json(silent=True) or {}
+    with get_db() as db:
+        db.execute("""
+            UPDATE watchlist SET
+                stock_type=?, sector=?, country=?, buy_target=?, sell_target=?,
+                notes=?, report_url=?, typical_drawdown=?
+            WHERE symbol=?
+        """, (
+            data.get("stock_type", ""), data.get("sector", ""), data.get("country", ""),
+            data.get("buy_target") or None, data.get("sell_target") or None,
+            data.get("notes", ""), data.get("report_url", ""),
+            data.get("typical_drawdown") or None, symbol,
+        ))
+    return jsonify({"ok": True})
 
 
 @app.route("/api/exchange-rates")

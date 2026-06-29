@@ -634,6 +634,77 @@ def _normalize_holding(h: dict) -> dict | None:
     }
 
 
+def fetch_current_quote(symbol: str) -> tuple:
+    """Aktuellen Kurs + Währung eines Symbols von Yahoo holen. (price, currency)."""
+    price, curr = None, ""
+    try:
+        t = yf.Ticker(symbol)
+        try:
+            fi = t.fast_info
+            lp = fi["lastPrice"] if "lastPrice" in fi else None
+            if lp:
+                price = float(lp)
+            c = fi.get("currency") if hasattr(fi, "get") else None
+            if c:
+                curr = str(c)
+        except Exception:
+            pass
+        if not price:
+            h = t.history(period="5d", interval="1d", auto_adjust=True)
+            if not h.empty:
+                price = float(h["Close"].dropna().iloc[-1])
+    except Exception as e:
+        print(f"[Watchlist] Kurs-Fehler {symbol}: {e}")
+    return price, curr
+
+
+def sync_watchlist():
+    """Watchlist-Werte aktualisieren: Kurs, Drawdown/CAGR-Historie und Alarme."""
+    cfg = load_config()
+    discord_url = cfg.get("discord_webhook_url", "")
+    today_str = datetime.date.today().isoformat()
+
+    with get_db() as db:
+        items = [(r["symbol"], r["name"]) for r in
+                 db.execute("SELECT symbol, name FROM watchlist").fetchall()]
+
+    print(f"[Watchlist] {len(items)} Werte werden aktualisiert...")
+    for symbol, name in items:
+        disp_name = name or symbol
+        price, curr = fetch_current_quote(symbol)
+        hist = fetch_price_history(symbol)
+        dd = calc_drawdown_metrics(hist)
+        ret = calc_15y_return(hist)
+
+        with get_db() as db:
+            db.execute("""
+                UPDATE watchlist SET current_price=?, currency=COALESCE(NULLIF(?,''), currency),
+                    avg_drawdown_pct=?, max_drawdown_pct=?, current_drawdown_pct=?,
+                    return_15y_cagr=?, synced_at=datetime('now')
+                WHERE symbol=?
+            """, (price or 0, curr, dd["avg_drawdown_pct"], dd["max_drawdown_pct"],
+                  dd["current_drawdown_pct"], ret["return_15y_cagr"], symbol))
+
+            row = db.execute("SELECT buy_target, sell_target FROM watchlist WHERE symbol=?", (symbol,)).fetchone()
+            buy_t, sell_t = row["buy_target"], row["sell_target"]
+            p = price or 0
+
+            # Stop-Loss/Ausbruch-Logik (wie im Portfolio)
+            if buy_t and p >= buy_t:
+                if not db.execute("SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='buy' AND date(triggered_at)=?",
+                                  (symbol, today_str)).fetchone():
+                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'buy', ?)", (symbol, p))
+                    send_discord_alert(discord_url, symbol, "buy", p, buy_t, disp_name)
+                    print(f"[Watchlist-Alarm] KAUF {symbol} {p:.2f} >= {buy_t:.2f}")
+            if sell_t and p <= sell_t:
+                if not db.execute("SELECT 1 FROM alarm_log WHERE ticker=? AND alarm_type='sell' AND date(triggered_at)=?",
+                                  (symbol, today_str)).fetchone():
+                    db.execute("INSERT INTO alarm_log (ticker, alarm_type, price) VALUES (?, 'sell', ?)", (symbol, p))
+                    send_discord_alert(discord_url, symbol, "sell", p, sell_t, disp_name)
+                    print(f"[Watchlist-Alarm] VERK {symbol} {p:.2f} <= {sell_t:.2f}")
+    print("[Watchlist] fertig.")
+
+
 def run_sync():
     print(f"\n{'='*50}")
     print(f"[Sync] Start: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -773,6 +844,12 @@ def run_sync():
                     )
                     send_discord_alert(discord_url, ticker, "sell", price, sell_t, name)
                     print(f"[Alarm] VERK  {ticker} Kurs={price:.2f} <= Marke={sell_t:.2f}")
+
+    # --- Step 5: Watchlist aktualisieren (eigene Werte, unabhängig von Parqet) ---
+    try:
+        sync_watchlist()
+    except Exception as e:
+        print(f"[Watchlist] Fehler: {e}")
 
     print(f"[Sync] Abgeschlossen: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return True

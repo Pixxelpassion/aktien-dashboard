@@ -330,6 +330,7 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
         <button class="filter-select" id="col-menu-btn" onclick="toggleColMenu(event)">⚙️ Spalten</button>
         <div class="col-menu" id="col-menu"></div>
       </div>
+      <button class="btn btn-primary" id="watchlist-add-btn" style="display:none" onclick="addWatchlistItem()">+ Wert hinzufügen</button>
       <div class="table-spacer"></div>
       <span style="font-size:.76rem;color:var(--muted)">Klick auf Zeile zum Bearbeiten</span>
     </div>
@@ -523,6 +524,7 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
   </div>
   <div class="panel-footer">
     <button class="btn btn-outline" onclick="clearAnnotation()">Zurücksetzen</button>
+    <button class="btn btn-danger" id="watchlist-remove-btn" style="display:none" onclick="removeWatchlistItem(editTicker)">Aus Watchlist entfernen</button>
     <div style="flex:1"></div>
     <button class="btn btn-primary" onclick="saveAnnotation()">Speichern</button>
   </div>
@@ -715,6 +717,11 @@ async function loadPortfolio() {
     const data = await fetch('/api/portfolio').then(r=>r.json());
     allHoldings = data.holdings || [];
     summary = data.summary || {};
+    // Watchlist-Werte anhängen (eigener Tab, kein Portfolio)
+    try {
+      const wl = await fetch('/api/watchlist').then(r=>r.json());
+      if (Array.isArray(wl)) allHoldings = allHoldings.concat(wl);
+    } catch(e) { console.error('Watchlist-Fehler:', e); }
     buildPortfolioTabs();
     currentPortfolio = 'all';
     document.querySelector('[data-portfolio="all"]').classList.add('active');
@@ -745,11 +752,16 @@ function convertPrice(value, isin, currencyOverride) {
   return value * rate;
 }
 
+const CURRENCY_SYMBOLS = {'USD':'$', 'DKK':'kr', 'GBP':'£', 'SEK':'kr', 'CHF':'CHF', 'JPY':'¥', 'CNY':'¥', 'INR':'₹', 'EUR':'€', 'HKD':'HK$', 'SGD':'S$', 'CAD':'C$', 'AUD':'A$', 'KRW':'₩', 'BRL':'R$'};
+
+function currencySymbol(code) {
+  return CURRENCY_SYMBOLS[(code||'').toUpperCase()] || code || '';
+}
+
 function getCurrencyLabel(isin, currencyOverride) {
   if (!showOriginalCurrency) return '€';
   const currCode = getCurrency(isin, currencyOverride);
-  const labels = {'USD':'$', 'DKK':'kr', 'GBP':'£', 'SEK':'kr', 'CHF':'CHF', 'JPY':'¥', 'CNY':'¥', 'INR':'₹', 'EUR':'€', 'HKD':'HK$', 'SGD':'S$', 'CAD':'C$', 'AUD':'A$', 'KRW':'₩', 'BRL':'R$'};
-  return labels[currCode] || currCode;
+  return CURRENCY_SYMBOLS[currCode] || currCode;
 }
 
 // =============================================================================
@@ -764,7 +776,9 @@ function buildPortfolioTabs() {
       portfolios.add(h.portfolio_name);
     }
   }
-  const sorted = Array.from(portfolios).sort();
+  const WL = '👀 Watchlist';
+  const sorted = Array.from(portfolios).filter(p => p !== WL).sort();
+  if (portfolios.has(WL)) sorted.push(WL);   // Watchlist immer ganz hinten
   console.log('Found portfolios:', sorted);
 
   const container = document.getElementById('portfolio-tabs');
@@ -781,9 +795,36 @@ function switchPortfolio(portfolio) {
   currentPortfolio = portfolio;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelector(`[data-portfolio="${portfolio}"]`).classList.add('active');
+  const addBtn = document.getElementById('watchlist-add-btn');
+  if (addBtn) addBtn.style.display = (portfolio === '👀 Watchlist') ? '' : 'none';
   renderSummary();
   renderTable();
   renderCharts();
+}
+
+async function addWatchlistItem() {
+  const symbol = prompt('Yahoo-Ticker oder ISIN (z.B. AAPL, NVDA, US0378331005):');
+  if (!symbol || !symbol.trim()) return;
+  const name = prompt('Name (optional, z.B. Apple):') || '';
+  try {
+    const r = await fetch('/api/watchlist', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({symbol: symbol.trim(), name: name.trim()})
+    }).then(r=>r.json());
+    if (r.ok) { toast('Zur Watchlist hinzugefügt ✓', 'success'); await loadPortfolio(); switchPortfolio('👀 Watchlist'); }
+    else { toast(r.error || 'Fehler', 'error'); }
+  } catch(e) { toast('Fehler beim Hinzufügen', 'error'); }
+}
+
+async function removeWatchlistItem(symbol) {
+  if (!confirm(`"${symbol}" aus der Watchlist entfernen?`)) return;
+  try {
+    await fetch(`/api/watchlist/${encodeURIComponent(symbol)}`, {method:'DELETE'});
+    toast('Entfernt ✓', 'success');
+    closeEditPanel();
+    await loadPortfolio();
+    switchPortfolio('👀 Watchlist');
+  } catch(e) { toast('Fehler beim Entfernen', 'error'); }
 }
 
 // =============================================================================
@@ -791,20 +832,30 @@ function switchPortfolio(portfolio) {
 // =============================================================================
 function renderSummary() {
   const filtered = currentPortfolio === 'all'
-    ? allHoldings
+    ? allHoldings.filter(h => !h.is_watchlist)
     : allHoldings.filter(h => h.portfolio_name === currentPortfolio);
 
+  const isWatchlistTab = currentPortfolio === '👀 Watchlist';
   const total_value = filtered.reduce((s,h) => s + (h.current_value || 0), 0);
   const total_cost = filtered.reduce((s,h) => s + (h.quantity || 0) * (h.purchase_price || 0), 0);
   const total_ret = total_cost > 0 ? ((total_value / total_cost) - 1) * 100 : 0;
 
-  document.getElementById('total-value').textContent = fmtEur(total_value);
-  document.getElementById('total-cost').textContent = 'Einstand: ' + fmtEur(total_cost);
   const retEl = document.getElementById('total-return');
-  retEl.textContent = fmtPct(total_ret);
-  retEl.className = 'card-value ' + colorPct(total_ret);
-  const absRet = total_value - total_cost;
-  document.getElementById('total-return-abs').textContent = fmtEur(absRet) + ' absolut';
+  if (isWatchlistTab) {
+    // Watchlist hat keinen Bestand/Wert
+    document.getElementById('total-value').textContent = '—';
+    document.getElementById('total-cost').textContent = 'Beobachtungsliste';
+    retEl.textContent = '—';
+    retEl.className = 'card-value neu';
+    document.getElementById('total-return-abs').textContent = 'kein Bestand';
+  } else {
+    document.getElementById('total-value').textContent = fmtEur(total_value);
+    document.getElementById('total-cost').textContent = 'Einstand: ' + fmtEur(total_cost);
+    retEl.textContent = fmtPct(total_ret);
+    retEl.className = 'card-value ' + colorPct(total_ret);
+    const absRet = total_value - total_cost;
+    document.getElementById('total-return-abs').textContent = fmtEur(absRet) + ' absolut';
+  }
   document.getElementById('positions-count').textContent = filtered.length;
   const annotated = filtered.filter(h=>h.stock_type||h.sector||h.country).length;
   document.getElementById('annotated-count').textContent = annotated + ' / ' + filtered.length + ' annotiert';
@@ -893,7 +944,8 @@ function renderTable() {
   const typF = document.getElementById('type-filter').value;
 
   let rows = allHoldings.filter(h => {
-    if (currentPortfolio !== 'all' && h.portfolio_name !== currentPortfolio) return false;
+    if (currentPortfolio === 'all') { if (h.is_watchlist) return false; }
+    else if (h.portfolio_name !== currentPortfolio) return false;
     if (q && !h.ticker.toLowerCase().includes(q) && !h.name?.toLowerCase().includes(q)) return false;
     if (secF && h.sector !== secF) return false;
     if (typF && h.stock_type !== typF) return false;
@@ -924,7 +976,7 @@ function renderTable() {
 
   const tbody = document.getElementById('holdings-tbody');
   tbody.innerHTML = rows.map((h,i) => {
-    const retCls = colorPct(h.total_return_pct);
+    const isWL = !!h.is_watchlist;
     const typeBadge = h.stock_type ? typeHtml(h.stock_type) : '<span class="badge badge-empty">—</span>';
     const ddHtml = drawdownBarHtml(h.current_drawdown_pct, h.typical_drawdown);
     const cagrCls = h.return_15y_cagr != null ? colorPct(h.return_15y_cagr) : 'neu';
@@ -932,35 +984,42 @@ function renderTable() {
     const buyStatus = h.buy_target && h.current_price >= h.buy_target ? '🟢' : '';
     const sellStatus = h.sell_target && h.current_price <= h.sell_target ? '🔴' : '';
 
+    // Währung: Watchlist immer nativ (kein EUR-Toggle); Portfolio wie gehabt
     const curr = getCurrency(h.isin, h.currency_override);
-    const currLabel = getCurrencyLabel(h.isin, h.currency_override);
-    const pp = convertPrice(h.purchase_price, h.isin, h.currency_override);
-    const cp = convertPrice(h.current_price, h.isin, h.currency_override);
-    const cv = convertPrice(h.current_value, h.isin, h.currency_override);
+    const currLabel = isWL ? currencySymbol(h.currency) : getCurrencyLabel(h.isin, h.currency_override);
+    const conv = (v) => isWL ? v : convertPrice(v, h.isin, h.currency_override);
+    const cp = conv(h.current_price);
 
-    // Position pill styling
-    const posPill = h.position_size ? (() => {
+    const DASH = '<span style="color:var(--muted)">—</span>';
+    const posPill = (!isWL && h.position_size) ? (() => {
       const sizeMap = {'25%':'position-25', '50%':'position-50', '75%':'position-75', '100%':'position-100'};
       const cls = sizeMap[h.position_size] || '';
       return `<span class="position-pill ${cls}">${h.position_size}</span>`;
-    })() : '<span style="color:var(--muted)">—</span>';
+    })() : DASH;
+    const ppCell  = isWL ? DASH : `${currLabel} ${fmt(conv(h.purchase_price))}`;
+    const cvCell  = isWL ? DASH : `${currLabel} ${fmt(conv(h.current_value))}`;
+    const retCell = isWL ? DASH : `<span class="${colorPct(h.total_return_pct)}">${fmtPct(h.total_return_pct)}</span>`;
+    const buyCell  = h.buy_target!=null  ? `${buyStatus} ${currLabel} ${fmt(conv(h.buy_target))}`  : DASH;
+    const sellCell = h.sell_target!=null ? `${sellStatus} ${currLabel} ${fmt(conv(h.sell_target))}` : DASH;
+    const currTag = isWL ? `<span style="font-size:.7rem;color:var(--muted)">(${escHtml(h.currency||'')})</span>`
+                         : (showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code||curr})</span>` : '');
 
     return `<tr onclick="openEditPanel('${h.ticker}')">
       <td data-col="position_size" style="text-align:center">${posPill}</td>
       <td data-col="name" class="name-cell">
         ${reportLinkHtml(h)}
         <span class="ticker-badge">${escHtml(h.ticker)}</span>
-        ${showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code})</span>` : ''}
+        ${currTag}
       </td>
-      <td data-col="purchase_price" style="text-align:right">${currLabel} ${fmt(pp)}</td>
+      <td data-col="purchase_price" style="text-align:right">${ppCell}</td>
       <td data-col="current_price" style="text-align:right;font-weight:600">${currLabel} ${fmt(cp)}</td>
-      <td data-col="current_value" style="text-align:right;font-weight:700">${currLabel} ${fmt(cv)}</td>
-      <td data-col="total_return_pct" style="text-align:right"><span class="${retCls}">${fmtPct(h.total_return_pct)}</span></td>
+      <td data-col="current_value" style="text-align:right;font-weight:700">${cvCell}</td>
+      <td data-col="total_return_pct" style="text-align:right">${retCell}</td>
       <td data-col="stock_type">${typeBadge}</td>
       <td data-col="sector" style="color:var(--muted);font-size:.78rem">${h.sector ? sectorIcon(h.sector)+' '+h.sector : '—'}</td>
       <td data-col="country" style="color:var(--muted);font-size:.78rem">${h.country ? countryFlag(h.country)+' '+h.country : '—'}</td>
-      <td data-col="buy_target" style="text-align:right;font-size:.8rem">${h.buy_target!=null ? buyStatus+' '+currLabel+' '+fmt(convertPrice(h.buy_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
-      <td data-col="sell_target" style="text-align:right;font-size:.8rem">${h.sell_target!=null ? sellStatus+' '+currLabel+' '+fmt(convertPrice(h.sell_target, h.isin, h.currency_override)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td data-col="buy_target" style="text-align:right;font-size:.8rem">${buyCell}</td>
+      <td data-col="sell_target" style="text-align:right;font-size:.8rem">${sellCell}</td>
       <td data-col="current_drawdown_pct">${ddHtml}</td>
       <td data-col="return_15y_cagr" style="text-align:right"><span class="${cagrCls}">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</span></td>
     </tr>`;
@@ -1146,6 +1205,7 @@ async function openEditPanel(ticker) {
   editTicker = ticker;
   const h = allHoldings.find(x=>x.ticker===ticker);
   if (!h) return;
+  const isWL = !!h.is_watchlist;
 
   document.getElementById('panel-name').textContent = h.name || ticker;
   document.getElementById('panel-ticker-isin').textContent = ticker + (h.isin ? ' · ' + h.isin : '');
@@ -1159,11 +1219,12 @@ async function openEditPanel(ticker) {
     return `${fmtPct(h.current_drawdown_pct)} / Typ: ${fmtPct(h.typical_drawdown)} ${status}`;
   })() : fmtPct(h.current_drawdown_pct);
 
+  const kursDisp = isWL ? `${currencySymbol(h.currency)} ${fmt(h.current_price)}` : fmtEur(h.current_price);
   document.getElementById('panel-info').innerHTML = `
-    <div class="panel-info-item"><div class="panel-info-label">Kurs</div><div class="panel-info-val">${fmtEur(h.current_price)}</div></div>
-    <div class="panel-info-item"><div class="panel-info-label">Größe</div><div class="panel-info-val">${h.position_size ? h.position_size : '(ungesetzt)'}</div></div>
-    <div class="panel-info-item"><div class="panel-info-label">Einstand</div><div class="panel-info-val">${fmtEur(h.purchase_price)}</div></div>
-    <div class="panel-info-item"><div class="panel-info-label">Rendite</div><div class="panel-info-val ${colorPct(h.total_return_pct)}">${fmtPct(h.total_return_pct)}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Kurs</div><div class="panel-info-val">${kursDisp}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Größe</div><div class="panel-info-val">${isWL ? '—' : (h.position_size ? h.position_size : '(ungesetzt)')}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Einstand</div><div class="panel-info-val">${isWL ? '—' : fmtEur(h.purchase_price)}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Rendite</div><div class="panel-info-val ${isWL ? 'neu' : colorPct(h.total_return_pct)}">${isWL ? '—' : fmtPct(h.total_return_pct)}</div></div>
     <div class="panel-info-item"><div class="panel-info-label">DD aktuell vs. Typ</div><div class="panel-info-val ${colorPct(h.current_drawdown_pct)}">${ddComparison}</div></div>
     <div class="panel-info-item"><div class="panel-info-label">DD Max</div><div class="panel-info-val neg">${fmtPct(h.max_drawdown_pct)}</div></div>
     <div class="panel-info-item"><div class="panel-info-label">15J CAGR</div><div class="panel-info-val ${colorPct(h.return_15y_cagr)}">${h.return_15y_cagr!=null?fmtPct(h.return_15y_cagr)+' p.a.':'—'}</div></div>
@@ -1172,9 +1233,10 @@ async function openEditPanel(ticker) {
   document.getElementById('edit-type').value   = h.stock_type || '';
   document.getElementById('edit-sector').value = h.sector || '';
   document.getElementById('edit-country').value = h.country || '';
-  // Marken werden in EUR gespeichert; im Original-Modus zur Eingabe umrechnen.
-  const tgtRate = showOriginalCurrency ? getExchangeRate(h.isin, h.currency_override) : 1;
-  const tgtCurr = getCurrencyLabel(h.isin, h.currency_override);
+  // Portfolio: Marken in EUR gespeichert, im Original-Modus umrechnen.
+  // Watchlist: Marken nativ (keine Umrechnung).
+  const tgtRate = (!isWL && showOriginalCurrency) ? getExchangeRate(h.isin, h.currency_override) : 1;
+  const tgtCurr = isWL ? currencySymbol(h.currency) : getCurrencyLabel(h.isin, h.currency_override);
   document.getElementById('edit-buy').value    = h.buy_target  != null ? +(h.buy_target  * tgtRate).toFixed(2) : '';
   document.getElementById('edit-sell').value   = h.sell_target != null ? +(h.sell_target * tgtRate).toFixed(2) : '';
   document.getElementById('buy-curr').textContent  = tgtCurr;
@@ -1186,8 +1248,9 @@ async function openEditPanel(ticker) {
   document.getElementById('edit-report-url').value = h.report_url || '';
 
   // Zeige auto-erkannte Währung
-  const autoCurrency = getCurrency(h.isin);
+  const autoCurrency = isWL ? (h.currency || '—') : getCurrency(h.isin);
   document.getElementById('currency-auto').textContent = `Automatisch erkannt: ${autoCurrency}`;
+  document.getElementById('watchlist-remove-btn').style.display = isWL ? '' : 'none';
 
   document.getElementById('edit-panel').classList.add('open');
   document.getElementById('overlay').classList.add('open');
@@ -1204,11 +1267,12 @@ async function saveAnnotation() {
   const buy  = document.getElementById('edit-buy').value;
   const sell = document.getElementById('edit-sell').value;
 
-  // Eingabe erfolgt in der aktuell angezeigten Währung -> für die Speicherung
-  // nach EUR zurückrechnen (Rate anhand der ggf. gewählten Währungs-Override).
-  const ovr = document.getElementById('edit-currency').value || '';
   const editH = allHoldings.find(x => x.ticker === editTicker);
-  const tgtRate = (showOriginalCurrency && editH) ? getExchangeRate(editH.isin, ovr) : 1;
+  const isWL = !!(editH && editH.is_watchlist);
+  // Watchlist-Marken sind nativ (keine Umrechnung). Portfolio: Eingabe in
+  // Anzeige-Währung -> zur Speicherung nach EUR zurückrechnen.
+  const ovr = document.getElementById('edit-currency').value || '';
+  const tgtRate = (!isWL && showOriginalCurrency && editH) ? getExchangeRate(editH.isin, ovr) : 1;
 
   const typicalDd = document.getElementById('edit-typical-dd').value;
   const body = {
@@ -1225,7 +1289,8 @@ async function saveAnnotation() {
   };
 
   try {
-    await fetch(`/api/annotations/${editTicker}`, {
+    const url = isWL ? `/api/watchlist/${encodeURIComponent(editTicker)}` : `/api/annotations/${editTicker}`;
+    await fetch(url, {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
     });
     // Update local state
