@@ -239,6 +239,7 @@ tbody td .ticker-badge{font-weight:400}
     <span id="sync-label">Wird geladen…</span>
   </div>
   <div class="header-actions">
+    <button class="btn btn-ghost btn-sm" onclick="openScenarioModal()">📊 Szenarien</button>
     <button class="btn btn-ghost btn-sm" id="alarms-btn" onclick="openAlarms()">
       Alarme <span id="alarm-count-badge" class="alarm-badge hidden">0</span>
     </button>
@@ -602,6 +603,27 @@ tbody td .ticker-badge{font-weight:400}
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="closeAlarms()">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scenario Modal -->
+<div class="modal-bg" id="scenario-modal">
+  <div class="modal" style="width:480px;max-width:95vw">
+    <div class="modal-header">
+      📊 Portfolio-Szenarios
+      <button class="close-btn" onclick="closeScenarioModal()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:500px;overflow-y:auto">
+      <div id="scenario-list" style="display:flex;flex-direction:column;gap:.6rem">
+        <!-- Checkboxen werden hier eingefügt -->
+      </div>
+    </div>
+    <div class="modal-footer" style="flex-direction:column;gap:.5rem">
+      <div id="scenario-results" style="background:var(--bg);padding:.8rem;border-radius:8px;font-size:.85rem">
+        <!-- Ergebnisse werden hier angezeigt -->
+      </div>
+      <button class="btn btn-primary" onclick="closeScenarioModal()">Schließen</button>
     </div>
   </div>
 </div>
@@ -1444,6 +1466,96 @@ function closeAlarms() {
 }
 
 // =============================================================================
+// SCENARIO MODAL (Was-wäre-wenn-Analyse)
+// =============================================================================
+let scenarioExcluded = new Set();  // Welche Tickers sind ausgeschlossen
+
+function openScenarioModal() {
+  const modal = document.getElementById('scenario-modal');
+  modal.classList.add('open');
+
+  // Alle Portfolio-Positionen auflisten (ohne Watchlist)
+  const positions = allHoldings.filter(h => !h.is_watchlist && h.portfolio_name !== '👀 Watchlist');
+  const list = document.getElementById('scenario-list');
+
+  if (positions.length === 0) {
+    list.innerHTML = '<p style="color:var(--muted)">Keine Positionen vorhanden.</p>';
+    return;
+  }
+
+  list.innerHTML = positions.map(h => `
+    <label style="display:flex;align-items:center;gap:.5rem;padding:.5rem;border-radius:6px;background:var(--bg);cursor:pointer">
+      <input type="checkbox" class="scenario-checkbox" data-ticker="${h.ticker}"
+             onchange="updateScenario()" ${scenarioExcluded.has(h.ticker) ? 'checked' : ''}>
+      <span style="flex:1">${escHtml(h.name || h.ticker)} (${h.ticker})</span>
+      <span style="font-size:.75rem;color:var(--muted)">${fmt(h.current_value || h.current_price || 0)}</span>
+    </label>
+  `).join('');
+
+  updateScenario();
+}
+
+function closeScenarioModal() {
+  document.getElementById('scenario-modal').classList.remove('open');
+}
+
+function updateScenario() {
+  // Sammle alle angehakten Tickers
+  const checkboxes = document.querySelectorAll('.scenario-checkbox:checked');
+  scenarioExcluded.clear();
+  checkboxes.forEach(cb => scenarioExcluded.add(cb.dataset.ticker));
+
+  renderScenarioResults();
+}
+
+function renderScenarioResults() {
+  const positions = allHoldings.filter(h => !h.is_watchlist && h.portfolio_name !== '👀 Watchlist');
+
+  // Filtere auf nicht-ausgeschlossene Positionen
+  const included = positions.filter(h => !scenarioExcluded.has(h.ticker));
+
+  if (included.length === 0) {
+    document.getElementById('scenario-results').innerHTML = '<p style="color:var(--red);font-weight:700">Alle Positionen ausgeschlossen!</p>';
+    return;
+  }
+
+  // Berechne Szenarien-Metriken
+  let totalValue = 0, totalCost = 0;
+  included.forEach(h => {
+    const cp = convertPrice(h.current_price, h.isin, h.currency_override);
+    const cv = h.quantity * cp;
+    totalValue += cv || 0;
+    totalCost += h.purchase_price ? (h.quantity * h.purchase_price) : 0;
+  });
+
+  const scenarioReturn = totalCost > 0 ? ((totalValue - totalCost) / totalCost * 100) : 0;
+
+  // Vergleich: wie viel wird durch Ausschluss verändert?
+  const realTotalValue = summary.total_value || 0;
+  const realTotalReturn = summary.total_return_pct || 0;
+  const excluded_value = realTotalValue - totalValue;
+  const diff_return = realTotalReturn - scenarioReturn;
+
+  document.getElementById('scenario-results').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;font-size:.85rem">
+      <div>
+        <div style="color:var(--muted);font-size:.75rem;text-transform:uppercase">Szenario-Wert</div>
+        <div style="font-weight:700;font-size:1.05rem">${fmt(totalValue)} €</div>
+        <div style="color:var(--muted);font-size:.75rem;margin-top:.2rem">Ausgeschlossen: ${fmt(excluded_value)} €</div>
+      </div>
+      <div>
+        <div style="color:var(--muted);font-size:.75rem;text-transform:uppercase">Szenario-Rendite</div>
+        <div style="font-weight:700;font-size:1.05rem;color:${scenarioReturn > 0 ? '#22c55e' : 'var(--red)'}">${fmtPct(scenarioReturn)}</div>
+        <div style="color:var(--muted);font-size:.75rem;margin-top:.2rem">Differenz: ${fmtPct(diff_return)}</div>
+      </div>
+    </div>
+    <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);font-size:.8rem;color:var(--muted)">
+      <strong>Ausgewählte Positionen:</strong> ${included.length} / ${positions.length}
+    </div>
+  `;
+}
+
+// =============================================================================
 // SYNC
 // =============================================================================
 async function triggerSync() {
@@ -1483,6 +1595,7 @@ function closeAll() {
   closeEditPanel();
   closeSettings();
   closeAlarms();
+  closeScenarioModal();
 }
 
 // =============================================================================
