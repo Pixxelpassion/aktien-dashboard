@@ -353,6 +353,9 @@ tbody td .ticker-badge{font-weight:400}
       <table>
         <thead>
           <tr>
+            <th style="text-align:center;width:40px;cursor:default" title="In Szenario-Berechnung einbeziehen">
+              ✓
+            </th>
             <th data-col="position_size" style="cursor:pointer;text-align:center" onclick="sort('position_size')">
               Position <span id="sort-indicator-position_size" class="sort-indicator"></span>
             </th>
@@ -844,6 +847,10 @@ function switchPortfolio(portfolio) {
   document.querySelector(`[data-portfolio="${portfolio}"]`).classList.add('active');
   const addBtn = document.getElementById('watchlist-add-btn');
   if (addBtn) addBtn.style.display = (portfolio === '👀 Watchlist') ? '' : 'none';
+  // Szenario zurücksetzen beim Portfolio-Wechsel
+  scenarioIncluded.clear();
+  const warningEl = document.getElementById('scenario-warning');
+  if (warningEl) warningEl.remove();
   renderSummary();
   renderTable();
   renderCharts();
@@ -1053,6 +1060,10 @@ function renderTable() {
                          : (showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code||curr})</span>` : '');
 
     return `<tr onclick="openEditPanel('${h.ticker}')">
+      <td style="text-align:center;padding:0" onclick="event.stopPropagation()">
+        <input type="checkbox" class="scenario-checkbox" data-ticker="${h.ticker}" checked
+               onchange="updateScenarioTable()" style="cursor:pointer;margin:.3rem">
+      </td>
       <td data-col="position_size" style="text-align:center">${posPill}</td>
       <td data-col="name" class="name-cell">
         ${reportLinkHtml(h)}
@@ -1468,7 +1479,63 @@ function closeAlarms() {
 // =============================================================================
 // SCENARIO MODAL (Was-wäre-wenn-Analyse)
 // =============================================================================
-let scenarioExcluded = new Set();  // Welche Tickers sind ausgeschlossen
+// =============================================================================
+// PORTFOLIO-SZENARIO (Tabellenzeilen-Checkboxen)
+// =============================================================================
+let scenarioIncluded = new Set();  // Welche Tickers sind einbezogen (leer = alle)
+
+function updateScenarioTable() {
+  // Sammle alle **angehakten** Checkboxen für das aktuelle Portfolio
+  const checked = [...document.querySelectorAll('.scenario-checkbox:checked')].map(c => c.dataset.ticker);
+
+  // Setze scenarioIncluded = AUSGESCHLOSSENE Positionen
+  const filtered = allHoldings.filter(h => !h.is_watchlist && (currentPortfolio === 'all' || h.portfolio_name === currentPortfolio));
+  if (checked.length === filtered.length) {
+    // Alle angehakt -> Szenario = alles rein (keine Ausschlüsse)
+    scenarioIncluded.clear();
+  } else {
+    // Speichere die AUSGESCHLOSSENEN (nicht angehakten)
+    scenarioIncluded = new Set(filtered.filter(h => !checked.includes(h.ticker)).map(h => h.ticker));
+  }
+
+  // Neuberechnung der Summary für einbezogene Positionen
+  const included = filtered.filter(h => !scenarioIncluded.has(h.ticker));
+
+  let total_value = 0, total_cost = 0, total_position = 0;
+  included.forEach(h => {
+    const cp = convertPrice(h.current_price, h.isin, h.currency_override);
+    const cv = h.quantity * cp;
+    total_value += cv || 0;
+    total_cost += h.purchase_price ? (h.quantity * h.purchase_price) : 0;
+    total_position += h.quantity || 0;
+  });
+
+  const total_return_pct = total_cost > 0 ? ((total_value - total_cost) / total_cost * 100) : 0;
+
+  // Aktualisiere Summary-Boxen (nur die card-value Elemente)
+  document.getElementById('total-value').textContent = `${fmt(total_value)} €`;
+  document.getElementById('total-return').textContent = `${fmtPct(total_return_pct)}`;
+  document.getElementById('total-return').style.color = total_return_pct >= 0 ? '#22c55e' : 'var(--red)';
+  document.getElementById('positions-count').textContent = `${fmt(total_position)}`;
+
+  // Wenn Szenario aktiv (nicht alle Positionen), zeige Hinweis
+  if (scenarioIncluded.size > 0) {
+    const excluded_count = scenarioIncluded.size;
+    const info = document.querySelector('.cards-row');
+    let warningEl = document.getElementById('scenario-warning');
+    if (!warningEl) {
+      warningEl = document.createElement('div');
+      warningEl.id = 'scenario-warning';
+      warningEl.style.cssText = 'background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:.6rem .8rem;border-radius:6px;margin-bottom:.75rem;font-size:.85rem;font-weight:600';
+      info.parentElement.insertBefore(warningEl, info);
+    }
+    warningEl.textContent = `⚠️ Szenario aktiv: ${excluded_count} Position(en) ausgeschlossen`;
+  } else {
+    // Szenario nicht aktiv -> Warnung entfernen
+    const warningEl = document.getElementById('scenario-warning');
+    if (warningEl) warningEl.remove();
+  }
+}
 
 function openScenarioModal() {
   const modal = document.getElementById('scenario-modal');
