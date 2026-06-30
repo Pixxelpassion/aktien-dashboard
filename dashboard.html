@@ -239,7 +239,6 @@ tbody td .ticker-badge{font-weight:400}
     <span id="sync-label">Wird geladen…</span>
   </div>
   <div class="header-actions">
-    <button class="btn btn-ghost btn-sm" onclick="openScenarioModal()">📊 Szenarien</button>
     <button class="btn btn-ghost btn-sm" id="alarms-btn" onclick="openAlarms()">
       Alarme <span id="alarm-count-badge" class="alarm-badge hidden">0</span>
     </button>
@@ -353,7 +352,7 @@ tbody td .ticker-badge{font-weight:400}
       <table>
         <thead>
           <tr>
-            <th style="text-align:center;width:40px;cursor:default" title="In Szenario-Berechnung einbeziehen">
+            <th data-col="scenario" style="text-align:center;width:40px;cursor:default" title="In Szenario-Berechnung einbeziehen">
               ✓
             </th>
             <th data-col="position_size" style="cursor:pointer;text-align:center" onclick="sort('position_size')">
@@ -943,6 +942,7 @@ function updateSortIndicators() {
 // SPALTEN-KONFIGURATION (persistent via localStorage)
 // =============================================================================
 const COLUMNS = [
+  {key:'scenario',             label:'Szenario'},
   {key:'position_size',        label:'Position'},
   {key:'purchase_price',       label:'Einstand'},
   {key:'current_price',        label:'Kurs'},
@@ -1060,7 +1060,7 @@ function renderTable() {
                          : (showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code||curr})</span>` : '');
 
     return `<tr onclick="openEditPanel('${h.ticker}')">
-      <td style="text-align:center;padding:0" onclick="event.stopPropagation()">
+      <td data-col="scenario" style="text-align:center;padding:0" onclick="event.stopPropagation()">
         <input type="checkbox" class="scenario-checkbox" data-ticker="${h.ticker}" checked
                onchange="updateScenarioTable()" style="cursor:pointer;margin:.3rem">
       </td>
