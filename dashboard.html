@@ -1501,16 +1501,11 @@ function updateScenarioTable() {
   // Neuberechnung der Summary für einbezogene Positionen
   const included = filtered.filter(h => !scenarioIncluded.has(h.ticker));
 
-  let total_value = 0, total_cost = 0;
-  included.forEach(h => {
-    const cp = convertPrice(h.current_price, h.isin, h.currency_override);
-    const cv = h.quantity * cp;
-    total_value += cv || 0;
-    total_cost += h.purchase_price && h.quantity ? (h.quantity * h.purchase_price) : 0;
-  });
-
-  const total_return_pct = total_cost > 0 ? ((total_value - total_cost) / total_cost * 100) : 0;
-  const total_position = included.length;  // Anzahl Positionen, NICHT Summe der Stückzahlen!
+  // Gleiche Berechnung wie renderSummary() — nutze h.current_value direkt!
+  const total_value = included.reduce((s,h) => s + (h.current_value || 0), 0);
+  const total_cost = included.reduce((s,h) => s + (h.quantity || 0) * (h.purchase_price || 0), 0);
+  const total_return_pct = total_cost > 0 ? ((total_value / total_cost) - 1) * 100 : 0;
+  const total_position = included.length;
 
   // Aktualisiere Summary-Boxen (nur die card-value Elemente)
   document.getElementById('total-value').textContent = `${fmt(total_value)} €`;
