@@ -16,7 +16,7 @@
   --pp-muted:#6b7280;--pp-bg:#fbfbfb;--pp-bg2:#f3f3f3;--pp-card:#ffffff;--pp-border:#e6e8e1;--pp-neg:#b82105;
 
   --bg:var(--pp-bg);--card:var(--pp-card);--border:var(--pp-border);--text:var(--pp-ink);--muted:var(--pp-muted);
-  --accent:var(--pp-green);--accent-light:#eef4d6;--green:var(--pp-teal);--green-bg:#dcfce7;
+  --accent:var(--pp-green);--accent-light:#eef4d6;--green:#22c55e;--green-bg:#dcfce7;--grey-text:#6b7280;
   --red:var(--pp-neg);--red-bg:#fee2e2;--amber:var(--pp-orange);--amber-bg:#fef3c7;
   --header-bg:var(--pp-ink);--header-text:#f8fafc;
   --shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.06);
@@ -113,15 +113,15 @@ td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
 .val-pos{color:var(--green);font-weight:600}
 .val-neg{color:var(--red);font-weight:600}
 
-/* Type badges */
-.badge{display:inline-block;padding:.18rem .55rem;border-radius:20px;font-size:.71rem;font-weight:700;white-space:nowrap}
-.badge-growth{background:#d6eff2;color:#067884}
-.badge-dividend{background:#dcfce7;color:#15803d}
-.badge-cashflow{background:#fff7ed;color:#c2410c}
+/* Type badges & Position pills: einheitliche Größe + feste Breite */
+.badge{display:inline-block;padding:.18rem .55rem;border-radius:20px;font-size:.71rem;font-weight:700;white-space:nowrap;min-width:80px;text-align:center;background:#e8eaed;color:#5f6368}
+.badge-growth{background:#e8eaed;color:#5f6368}
+.badge-dividend{background:#e8eaed;color:#5f6368}
+.badge-cashflow{background:#e8eaed;color:#5f6368}
 .badge-empty{background:var(--bg);color:var(--muted);border:1px dashed var(--border)}
 
 /* Position size pills */
-.position-pill{display:inline-block;padding:.18rem .55rem;font-size:.71rem;font-weight:700;white-space:nowrap}
+.position-pill{display:inline-block;padding:.18rem .55rem;font-size:.71rem;font-weight:700;white-space:nowrap;min-width:80px;text-align:center}
 .position-25{background:#f0f5dc;color:#6b7e21}
 .position-50{background:#d4e8a8;color:#4a5e1f}
 .position-75{background:#a8d368;color:#374a17}
@@ -208,8 +208,17 @@ th:hover .sort-indicator:empty::after{content:'⇅';color:var(--muted)}
 /* Responsive */
 @media(max-width:700px){
   .header{padding:.7rem 1rem}
-  main{padding:1rem}
-  .cards-row{grid-template-columns:1fr 1fr}
+  main{padding:.75rem .75rem}
+  .cards-row{grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem}
+  .card{padding:.8rem 1rem;font-size:.9rem}
+}
+@media(max-width:480px){
+  main{padding:.5rem .5rem}
+  .cards-row{grid-template-columns:1fr}
+  .card{padding:.7rem .85rem;font-size:.85rem}
+  .card-label{font-size:.65rem;margin-bottom:.3rem}
+  thead{font-size:.7rem}
+  tbody{font-size:.75rem}
 }
 .hidden{display:none!important}
 
@@ -1028,18 +1037,18 @@ function renderTable() {
         <span class="ticker-badge">${escHtml(h.ticker)}</span>
         ${currTag}
       </td>
-      <td data-col="purchase_price" style="text-align:right">${ppCell}</td>
-      <td data-col="current_price" style="text-align:right">${currLabel} ${fmt(cp)}</td>
-      <td data-col="current_value" style="text-align:right">${cvCell}</td>
+      <td data-col="purchase_price" style="text-align:right;color:var(--grey-text)">${ppCell}</td>
+      <td data-col="current_price" style="text-align:right;color:var(--grey-text)">${currLabel} ${fmt(cp)}</td>
+      <td data-col="current_value" style="text-align:right;color:var(--grey-text)">${cvCell}</td>
       <td data-col="total_return_pct" style="text-align:right">${retCell}</td>
       <td data-col="stock_type">${typeBadge}</td>
-      <td data-col="sector" style="color:var(--muted)">${h.sector || '—'}</td>
-      <td data-col="country" style="color:var(--muted)">${h.country || '—'}</td>
-      <td data-col="buy_target" style="text-align:right">${buyCell}</td>
-      <td data-col="sell_target" style="text-align:right">${sellCell}</td>
-      <td data-col="current_drawdown_pct">${ddHtml}</td>
-      <td data-col="return_15y_cagr" style="text-align:right">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</td>
-      <td data-col="return_15y_pct" style="text-align:right">${h.return_15y_pct!=null ? fmtPct(h.return_15y_pct) : '—'}</td>
+      <td data-col="sector" style="color:var(--grey-text)">${h.sector || '—'}</td>
+      <td data-col="country" style="color:var(--grey-text)">${h.country || '—'}</td>
+      <td data-col="buy_target" style="text-align:right;color:var(--grey-text)">${buyCell}</td>
+      <td data-col="sell_target" style="text-align:right;color:var(--grey-text)">${sellCell}</td>
+      <td data-col="current_drawdown_pct" style="color:var(--grey-text)">${ddHtml}</td>
+      <td data-col="return_15y_cagr" style="text-align:right;color:var(--grey-text)">${h.return_15y_cagr!=null ? fmtPct(h.return_15y_cagr)+' p.a.' : '—'}</td>
+      <td data-col="return_15y_pct" style="text-align:right;color:var(--grey-text)">${h.return_15y_pct!=null ? fmtPct(h.return_15y_pct) : '—'}</td>
     </tr>`;
   }).join('');
 
