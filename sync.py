@@ -839,7 +839,7 @@ def run_sync():
                     total_return_pct= excluded.total_return_pct,
                     weight          = excluded.weight,
                     portfolio_name  = excluded.portfolio_name,
-                    synced_at       = excluded.synced_at
+                    synced_at       = datetime('now')
             """, (
                 h["ticker"], h["name"], h["isin"],
                 h["quantity"], h["purchase_price"],
