@@ -352,6 +352,7 @@ def api_portfolio():
             FROM holdings h
             LEFT JOIN annotations a ON h.ticker = a.ticker
             LEFT JOIN metrics     m ON h.ticker = m.ticker
+            WHERE h.quantity > 0
             ORDER BY h.portfolio_name, h.current_value DESC
         """).fetchall()
         holdings = [dict(r) for r in rows]
