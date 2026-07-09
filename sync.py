@@ -848,16 +848,6 @@ def run_sync():
             ))
         print(f"[Sync] ✓ {saved_count} Holdings mit Portfolio-Namen gespeichert")
 
-        # --- Cleanup: Lösche Holdings, die Parqet nicht mehr sendet ---
-        tickers = [h["ticker"] for h in holdings]
-        placeholders = ",".join("?" * len(tickers))
-        deleted_count = db.execute(
-            f"DELETE FROM holdings WHERE ticker NOT IN ({placeholders})",
-            tickers
-        ).rowcount
-        if deleted_count > 0:
-            print(f"[Sync] ✓ {deleted_count} alte/verkaufte Positionen gelöscht")
-
     # --- Step 3: Fetch historical data + compute metrics ---
     tickers = [h["ticker"] for h in holdings]
     for ticker in tickers:
