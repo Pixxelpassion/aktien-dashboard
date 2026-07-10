@@ -16,7 +16,7 @@
   --pp-muted:#6b7280;--pp-bg:#fbfbfb;--pp-bg2:#f3f3f3;--pp-card:#ffffff;--pp-border:#e6e8e1;--pp-neg:#b82105;
 
   --bg:var(--pp-bg);--card:var(--pp-card);--border:var(--pp-border);--text:var(--pp-ink);--muted:var(--pp-muted);
-  --accent:var(--pp-green);--accent-light:#eef4d6;--green:#22c55e;--green-bg:#dcfce7;--grey-text:#6b7280;
+  --accent:var(--pp-green);--accent-light:#eef4d6;--green:#b7cb3a;--green-bg:#eef4d6;--grey-text:#6b7280;
   --red:var(--pp-neg);--red-bg:#fee2e2;--amber:var(--pp-orange);--amber-bg:#fef3c7;
   --header-bg:#ffffff;--header-text:var(--pp-ink);
   --shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.06);
@@ -30,7 +30,7 @@ body{font-family:var(--body-font);background:var(--bg);color:var(--text);min-hei
 .header{background:var(--header-bg);color:var(--header-text);padding:.9rem 1.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border);box-shadow:var(--shadow)}
 .header-brand{font-family:var(--head-font);font-size:1.15rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.6rem}
 .header-brand span{font-size:1.3rem}
-.header-logo{height:34px;width:auto;display:block}
+.header-logo{height:46px;width:auto;display:block}
 .header-spacer{flex:1}
 .header-meta{font-size:.78rem;color:var(--muted);white-space:nowrap}
 .header-actions{display:flex;gap:.6rem;align-items:center}
@@ -52,7 +52,7 @@ body{font-family:var(--body-font);background:var(--bg);color:var(--text);min-hei
 
 /* Sync indicator */
 .sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:.35rem}
-.sync-dot.ok{background:#22c55e}
+.sync-dot.ok{background:var(--green)}
 .sync-dot.warn{background:#f59e0b;animation:pulse 1.5s infinite}
 .sync-dot.error{background:#ef4444}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -175,7 +175,7 @@ td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
 /* Toast */
 #toasts{position:fixed;bottom:1.5rem;right:1.5rem;z-index:400;display:flex;flex-direction:column;gap:.5rem}
 .toast{background:var(--pp-ink);color:#fff;padding:.75rem 1.1rem;border-radius:10px;font-size:.83rem;box-shadow:var(--shadow-md);animation:slide-in .25s ease;display:flex;align-items:center;gap:.5rem;min-width:220px}
-.toast.success{border-left:3px solid #22c55e}
+.toast.success{border-left:3px solid var(--green)}
 .toast.error{border-left:3px solid var(--red)}
 .toast.info{border-left:3px solid var(--accent)}
 @keyframes slide-in{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -1177,7 +1177,7 @@ function drawdownBarHtml(current, typical) {
   if (Math.abs(diff) < 0.5) {
     color = '#fbbf24'; // Gelb - normal
   } else if (diff < 0) {
-    color = '#22c55e'; // Grün - besser als typisch
+    color = '#b7cb3a'; // Grün - besser als typisch
   } else if (diff < 2) {
     color = '#f59e0b'; // Orange - leicht drüber
   } else {
@@ -1531,7 +1531,7 @@ function updateScenarioTable() {
   // Aktualisiere Summary-Boxen (nur die card-value Elemente)
   document.getElementById('total-value').textContent = `${fmt(total_value)} €`;
   document.getElementById('total-return').textContent = `${fmtPct(total_return_pct)}`;
-  document.getElementById('total-return').style.color = total_return_pct >= 0 ? '#22c55e' : 'var(--red)';
+  document.getElementById('total-return').style.color = total_return_pct >= 0 ? '#b7cb3a' : 'var(--red)';
   document.getElementById('positions-count').textContent = total_position;  // Keine fmt(), nur Zahl
 
   // Wenn Szenario aktiv (nicht alle Positionen), zeige Hinweis
@@ -1628,7 +1628,7 @@ function renderScenarioResults() {
       </div>
       <div>
         <div style="color:var(--muted);font-size:.75rem;text-transform:uppercase">Szenario-Rendite</div>
-        <div style="font-weight:700;font-size:1.05rem;color:${scenarioReturn > 0 ? '#22c55e' : 'var(--red)'}">${fmtPct(scenarioReturn)}</div>
+        <div style="font-weight:700;font-size:1.05rem;color:${scenarioReturn > 0 ? '#b7cb3a' : 'var(--red)'}">${fmtPct(scenarioReturn)}</div>
         <div style="color:var(--muted);font-size:.75rem;margin-top:.2rem">Differenz: ${fmtPct(diff_return)}</div>
       </div>
     </div>
