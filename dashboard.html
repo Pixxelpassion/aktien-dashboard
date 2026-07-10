@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Parqet Portfolio Dashboard</title>
+<title>Pixxelpassion Portfolio</title>
 <link rel="icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEACABoBQAAFgAAACgAAAAQAAAAIAAAAAEACAAAAAAAAAEAABILAAASCwAAAAEAAAABAADy9vUAJSw4ACs5SgBNwLMAXmRsAFPVyACGqaMAR66kAEmBewBLxrsAH3FkAD2vpAAgMUYATLuxAOvr7QA1n5QARb2yADpBTAAjM0kALUdkACY5UwBEu68AMj1LAHyjnQA/npMAIS9DACk/WgAyTm0AHSc2ABonOQBQz8IAUc7CACWBdQCas7EA3+roADBKZQAYJTUA9vf4AOby8QBJsqcAqL26AB4vQwDz8/QA+fv6ACF5bABAoZYAkZSbAMjU0gAtPFIAUM/DAB8sPQBKxLgAJDZPAK+2vwDr8O8AnrayAF+LhQBLtq0AzM/TAElbcABWh34AUtPGABskMwD29vcAV2yCAExRWwC5zssAzdvZAMrT0QCvvMAANlVzADNQbgBvd38ATMe7AE/MvwBSpZoAnba7ACp9cgBQsaYAR4uDAPL5+ADb5ugAk7GsAG9+jwB5h4sAapKOAIWPmwAzjIIAiZKcACyQhQDP0NIAbnyQAB0oNgCjpqoAgMnAADaDegDi5OUATXJtADSQhQA6mI0AQameADpGVAAwQFgAQZ6VAKqyugBveYQA5fDvAMTh3gCZtbAALHJoAFWIgwDe7uwASbGoAFGBeQDHzdIAisnCAC2EeQBOX3oA4unoAOXr6gBQzsIApLm2AEJ7cgA2SF4AUNDDAB8rPQD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfn5+fn5+JV0EEQEBAQEEf35+fn5+DkE+HBwcXBwcEX9+fn42bFQ+fTJ9fX19fRZ/fn53ejhIHRkZGRkZGRkCf34rPAooLiQZEhISEhISAn9+KAosQ2ABHSkMDBI0FDB/AHEgdCJ+WgQWAmUCFBp7fy9tWWJqfn5+Kg4/aRoTO383TQ8PayZvAH5+flgTG1N/BlcLCycHZE5zUH5WR0c1fxdjFRAQEBAQFV5+W0ZAJX8XGDNJCQkJCUkDUXUjcn5/Bi1KfB4eHjF4A0xmaH5+f1IYHwUFBT0fA0tFOn5+fn95X3ANDTkHZ09Cfn5+fn5/RGEICAhuVSF2fn5+fn5+fwABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAA=">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,7 +12,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
 :root{
-  --pp-green:#b7cb3a;--pp-green-dark:#717e21;--pp-ink:#1A202C;--pp-teal:#09adbe;--pp-orange:#f76a0c;
+  --pp-green:#b7cb3a;--pp-green-dark:#717e21;--pp-ink:#241b13;--pp-teal:#09adbe;--pp-orange:#f76a0c;
   --pp-muted:#6b7280;--pp-bg:#fbfbfb;--pp-bg2:#f3f3f3;--pp-card:#ffffff;--pp-border:#e6e8e1;--pp-neg:#b82105;
 
   --bg:var(--pp-bg);--card:var(--pp-card);--border:var(--pp-border);--text:var(--pp-ink);--muted:var(--pp-muted);
@@ -28,8 +28,9 @@ body{font-family:var(--body-font);background:var(--bg);color:var(--text);min-hei
 
 /* Header */
 .header{background:var(--header-bg);color:var(--header-text);padding:.9rem 1.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-.header-brand{font-size:1.1rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.5rem}
+.header-brand{font-family:var(--head-font);font-size:1.15rem;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:.6rem}
 .header-brand span{font-size:1.3rem}
+.header-logo{height:28px;width:auto;display:block}
 .header-spacer{flex:1}
 .header-meta{font-size:.78rem;color:#94a3b8;white-space:nowrap}
 .header-actions{display:flex;gap:.6rem;align-items:center}
@@ -180,15 +181,17 @@ td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
 @keyframes slide-in{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
 
 /* Alarms table in modal */
-.alarm-row{display:grid;grid-template-columns:3.6rem 1fr 4.6rem 4.6rem 4.2rem;align-items:center;gap:.5rem;padding:.5rem 0;border-bottom:1px solid var(--border);font-size:.82rem}
+.alarm-row{display:grid;grid-template-columns:3.6rem 1fr 4.8rem 4.8rem 5.4rem;align-items:center;gap:.5rem;padding:.5rem 0;border-bottom:1px solid var(--border);font-size:.82rem}
 .alarm-row:last-child{border-bottom:none}
 .alarm-type-buy{color:var(--green);font-weight:700}
 .alarm-type-sell{color:var(--red);font-weight:700}
 .alarm-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.alarm-price,.alarm-target{text-align:right;color:var(--grey-text)}
-.alarm-date{text-align:right;color:var(--muted);font-size:.75rem}
+.alarm-price,.alarm-target{text-align:right;color:var(--grey-text);white-space:nowrap}
+.alarm-date{text-align:right;color:var(--muted);font-size:.75rem;white-space:nowrap}
 .alarm-row.is-old{opacity:.45}
 .alarm-row.is-old .alarm-type-buy,.alarm-row.is-old .alarm-type-sell{color:var(--muted)}
+.alarm-row-head{padding:.5rem 1.4rem;background:var(--pp-bg2);border-bottom:1px solid var(--border);font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.alarm-row-head span:nth-child(3),.alarm-row-head span:nth-child(4),.alarm-row-head span:nth-child(5){text-align:right}
 
 /* Tabs */
 .tab-btn{
@@ -238,7 +241,7 @@ tbody td .ticker-badge{font-weight:400}
 
 <!-- Header -->
 <header class="header">
-  <div class="header-brand"><span>📈</span> Parqet Dashboard</div>
+  <div class="header-brand"><img src="data:image/png;base64,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" alt="Pixxelpassion" class="header-logo"> Pixxelpassion Portfolio</div>
   <div class="header-spacer"></div>
   <div class="header-meta" id="sync-meta">
     <span class="sync-dot warn" id="sync-dot"></span>
@@ -605,6 +608,13 @@ tbody td .ticker-badge{font-weight:400}
     <div class="modal-header">
       🔔 Alarm-Protokoll
       <button class="close-btn" onclick="closeAlarms()">✕</button>
+    </div>
+    <div class="alarm-row alarm-row-head">
+      <span>Signal</span>
+      <span>Aktie</span>
+      <span>Kurs</span>
+      <span>Marke</span>
+      <span>Datum</span>
     </div>
     <div class="modal-body" id="alarms-list" style="max-height:400px;overflow-y:auto">
       <p style="color:var(--muted);font-size:.85rem">Lädt…</p>
