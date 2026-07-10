@@ -172,6 +172,12 @@ def init_db():
             symbol     TEXT,
             updated_at TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS portfolio_value_history (
+            portfolio_name TEXT,
+            month          TEXT,
+            value_eur      REAL,
+            PRIMARY KEY (portfolio_name, month)
+        );
         CREATE TABLE IF NOT EXISTS watchlist (
             symbol               TEXT PRIMARY KEY,
             name                 TEXT DEFAULT '',
@@ -370,6 +376,17 @@ def api_portfolio():
             "count":            len(holdings),
         },
     })
+
+
+@app.route("/api/portfolio-history")
+def api_portfolio_history():
+    portfolio = request.args.get("portfolio", "all")
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT month, value_eur FROM portfolio_value_history
+            WHERE portfolio_name = ? ORDER BY month
+        """, (portfolio,)).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/annotations/<ticker>", methods=["GET", "POST"])

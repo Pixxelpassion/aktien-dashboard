@@ -6,6 +6,7 @@ sendet Discord-Alarme bei Kauf-/Verkaufsmarken.
 from __future__ import annotations
 import json, time, sqlite3, datetime, re
 from pathlib import Path
+from collections import defaultdict
 import requests as http
 import yfinance as yf
 
@@ -859,8 +860,15 @@ def run_sync():
             print(f"[Sync] ✓ {deleted_count} alte/verkaufte Positionen gelöscht")
 
     # --- Step 3: Fetch historical data + compute metrics ---
-    tickers = [h["ticker"] for h in holdings]
-    for ticker in tickers:
+    with get_db() as db:
+        fx_rates = {r["currency"]: r["rate"] for r in
+                    db.execute("SELECT currency, rate FROM exchange_rates").fetchall()}
+
+    # portfolio_name -> { "YYYY-MM": kumulierter Wert in EUR }
+    history: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+
+    for h in holdings:
+        ticker = h["ticker"]
         print(f"[Yahoo] Historische Daten für {ticker}...")
         prices = fetch_price_history(ticker, years=16)
 
@@ -889,6 +897,31 @@ def run_sync():
                 dd["avg_drawdown_pct"], dd["max_drawdown_pct"],
                 dd["current_drawdown_pct"], ret["return_15y_pct"], ret["return_15y_cagr"],
             ))
+
+        # Historische Portfolio-Wertentwicklung: aktuelle Stückzahl * historischer Kurs,
+        # umgerechnet in EUR mit dem AKTUELLEN Wechselkurs (Näherung, keine historischen FX-Kurse).
+        quantity = h["quantity"] or 0
+        if quantity <= 0:
+            continue
+        curr = currency_for(h["isin"])
+        rate = fx_rates.get(curr, 1.0) or 1.0
+        portfolio_name = h.get("portfolio_name") or ""
+
+        for p in prices:
+            month = p["date"][:7]
+            value_eur = quantity * p["price"] / rate
+            history[portfolio_name][month] += value_eur
+            history["all"][month] += value_eur
+
+    with get_db() as db:
+        for portfolio_name, months in history.items():
+            for month, value_eur in months.items():
+                db.execute("""
+                    INSERT INTO portfolio_value_history (portfolio_name, month, value_eur)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(portfolio_name, month) DO UPDATE SET value_eur = excluded.value_eur
+                """, (portfolio_name, month, value_eur))
+    print(f"[Sync] ✓ Historische Wertentwicklung für {len(history)} Portfolios berechnet")
 
     # --- Step 4: Check buy/sell alarms ---
     discord_url = cfg.get("discord_webhook_url", "")
