@@ -160,6 +160,7 @@ td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
 .modal-bg.open{opacity:1;pointer-events:all}
 .modal{background:var(--card);border-radius:var(--radius);width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md);transform:scale(.97);transition:transform .2s}
+.modal-alarms{width:620px}
 .modal-bg.open .modal{transform:scale(1)}
 .modal-header{padding:1.2rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;font-weight:700;font-size:1rem}
 .modal-header .close-btn{margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:.25rem}
@@ -179,10 +180,15 @@ td{padding:.6rem .85rem;white-space:nowrap;vertical-align:middle}
 @keyframes slide-in{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
 
 /* Alarms table in modal */
-.alarm-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border);font-size:.82rem}
+.alarm-row{display:grid;grid-template-columns:3.6rem 1fr 4.6rem 4.6rem 4.2rem;align-items:center;gap:.5rem;padding:.5rem 0;border-bottom:1px solid var(--border);font-size:.82rem}
 .alarm-row:last-child{border-bottom:none}
 .alarm-type-buy{color:var(--green);font-weight:700}
 .alarm-type-sell{color:var(--red);font-weight:700}
+.alarm-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alarm-price,.alarm-target{text-align:right;color:var(--grey-text)}
+.alarm-date{text-align:right;color:var(--muted);font-size:.75rem}
+.alarm-row.is-old{opacity:.45}
+.alarm-row.is-old .alarm-type-buy,.alarm-row.is-old .alarm-type-sell{color:var(--muted)}
 
 /* Tabs */
 .tab-btn{
@@ -595,7 +601,7 @@ tbody td .ticker-badge{font-weight:400}
 
 <!-- Alarms Modal -->
 <div class="modal-bg" id="alarms-modal">
-  <div class="modal">
+  <div class="modal modal-alarms">
     <div class="modal-header">
       🔔 Alarm-Protokoll
       <button class="close-btn" onclick="closeAlarms()">✕</button>
@@ -1067,7 +1073,6 @@ function renderTable() {
       <td data-col="position_size" style="text-align:center">${posPill}</td>
       <td data-col="name" class="name-cell">
         ${reportLinkHtml(h)}
-        <span class="ticker-badge">${escHtml(h.ticker)}</span>
         ${currTag}
       </td>
       <td data-col="purchase_price" style="text-align:right;color:var(--grey-text)">${ppCell}</td>
@@ -1450,21 +1455,27 @@ async function openAlarms() {
       el.innerHTML = '<p style="color:var(--muted);font-size:.85rem;padding:.5rem 0">Noch keine Alarme ausgelöst.</p>';
       return;
     }
+    const todayStr = new Date().toLocaleDateString('de-DE');
     el.innerHTML = alarms.map(a => {
       const d = new Date(a.triggered_at.replace(' ','T')+'Z');
       const dt = d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const isOld = d.toLocaleDateString('de-DE') !== todayStr;
       const typeCls = a.alarm_type==='buy' ? 'alarm-type-buy' : 'alarm-type-sell';
       const label = a.alarm_type==='buy' ? '🟢 KAUF' : '🔴 VERK.';
       // Preis in Originalwährung (falls beim Auslösen gespeichert), sonst EUR
       const priceStr = (a.display_price != null && a.currency)
         ? `${currencySymbol(a.currency)} ${fmt(a.display_price)}`
         : fmtEur(a.price);
-      return `<div class="alarm-row">
+      const targetVal = a.alarm_type==='buy' ? a.buy_target : a.sell_target;
+      const targetStr = targetVal != null
+        ? `${(a.display_price != null && a.currency) ? currencySymbol(a.currency) : '€'} ${fmt(targetVal)}`
+        : '—';
+      return `<div class="alarm-row${isOld ? ' is-old' : ''}">
         <span class="${typeCls}">${label}</span>
-        <span style="font-weight:700">${escHtml(a.name||a.ticker)}</span>
-        <span class="ticker-badge">${escHtml(a.ticker)}</span>
-        <span style="color:var(--muted)">${priceStr}</span>
-        <span style="margin-left:auto;color:var(--muted);font-size:.75rem">${dt}</span>
+        <span class="alarm-name">${escHtml(a.name||a.ticker)}</span>
+        <span class="alarm-price">${priceStr}</span>
+        <span class="alarm-target">${targetStr}</span>
+        <span class="alarm-date">${dt}</span>
       </div>`;
     }).join('');
   } catch(e) {

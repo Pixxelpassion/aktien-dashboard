@@ -439,10 +439,13 @@ def api_keepalive():
 def api_alarms():
     with get_db() as db:
         rows = db.execute("""
-            SELECT al.*, COALESCE(h.name, w.name) AS name
+            SELECT al.*, COALESCE(h.name, w.name) AS name,
+                   COALESCE(a.buy_target, w.buy_target) AS buy_target,
+                   COALESCE(a.sell_target, w.sell_target) AS sell_target
             FROM alarm_log al
-            LEFT JOIN holdings  h ON h.ticker = al.ticker
-            LEFT JOIN watchlist w ON w.symbol = al.ticker
+            LEFT JOIN holdings     h ON h.ticker = al.ticker
+            LEFT JOIN annotations  a ON a.ticker = al.ticker
+            LEFT JOIN watchlist    w ON w.symbol = al.ticker
             ORDER BY al.triggered_at DESC LIMIT 100
         """).fetchall()
     return jsonify([dict(r) for r in rows])
