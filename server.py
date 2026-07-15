@@ -6,7 +6,8 @@ Startet via: python server.py
 from __future__ import annotations
 import json, os, sqlite3, threading, time, hashlib, base64, secrets, webbrowser
 from pathlib import Path
-from flask import Flask, jsonify, request, send_from_directory, redirect
+from flask import Flask, jsonify, request, send_from_directory, redirect, Response
+from werkzeug.security import check_password_hash
 import requests as http
 import schedule
 
@@ -32,6 +33,35 @@ app = Flask(__name__, static_folder=str(BASE_DIR))
 app.secret_key = secrets.token_hex(32)
 
 _pkce_store: dict[str, str] = {}  # state -> verifier
+
+
+# ---------------------------------------------------------------------------
+# Basic Auth (einfacher Passwortschutz, wie beim Affiliate-Dashboard)
+# Ohne gesetzte DASHBOARD_USER/DASHBOARD_PASSWORD_HASH bleibt der Zugriff
+# ungeschützt (lokale Entwicklung) — im Produktivbetrieb beide Env-Vars setzen.
+# ---------------------------------------------------------------------------
+
+def _auth_configured() -> bool:
+    return bool(os.environ.get("DASHBOARD_USER")) and bool(os.environ.get("DASHBOARD_PASSWORD_HASH"))
+
+
+def _check_auth(username: str, password: str) -> bool:
+    expected_user = os.environ.get("DASHBOARD_USER", "")
+    expected_hash = os.environ.get("DASHBOARD_PASSWORD_HASH", "")
+    return username == expected_user and check_password_hash(expected_hash, password)
+
+
+@app.before_request
+def _require_auth():
+    if not _auth_configured():
+        return None
+    auth = request.authorization
+    if not auth or not _check_auth(auth.username, auth.password):
+        return Response(
+            "Login erforderlich", 401,
+            {"WWW-Authenticate": 'Basic realm="Pixxelpassion Portfolio"'},
+        )
+    return None
 
 
 # ---------------------------------------------------------------------------
