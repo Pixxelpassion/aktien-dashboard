@@ -835,6 +835,8 @@ def run_sync():
                 VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))
                 ON CONFLICT(ticker) DO UPDATE SET
                     name            = excluded.name,
+                    quantity        = excluded.quantity,
+                    purchase_price  = excluded.purchase_price,
                     current_price   = excluded.current_price,
                     current_value   = excluded.current_value,
                     total_return_pct= excluded.total_return_pct,
