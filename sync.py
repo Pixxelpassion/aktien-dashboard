@@ -422,23 +422,44 @@ def refresh_token_if_needed(cfg: dict, force: bool = False) -> dict:
 # Yahoo Finance — historische Daten
 # ---------------------------------------------------------------------------
 
-def _yahoo_history(ticker: str, years: int = 16) -> list[dict]:
+def _yahoo_history(ticker: str, years: int = 16) -> tuple[list[dict], str]:
+    """Liefert (Kurse, Waehrung). Waehrung kommt von Yahoo selbst (fast_info),
+    nicht aus dem ISIN-Praefix geraten — u.a. weil Londoner Aktien in Pence
+    (GBp/GBX) notiert werden, nicht in Pfund (GBP), sonst waere die Umrechnung
+    um Faktor 100 falsch."""
     try:
         t = yf.Ticker(ticker)
+        raw_currency = ""
+        try:
+            fi = t.fast_info
+            c = fi.get("currency") if hasattr(fi, "get") else None
+            if c:
+                raw_currency = str(c)
+        except Exception:
+            pass
+
         # auto_adjust=False -> "Close" ist nur split-bereinigt (Dividenden NICHT
         # herausgerechnet) = der tatsächliche Kurs von damals. So entspricht die
         # 15J-Rendite dem Kursvergleich ("wo stand die Aktie") statt Total Return.
         hist = t.history(period=f"{years}y", interval="1mo", auto_adjust=False)
         if hist.empty:
-            return []
-        return [
-            {"date": str(idx.date()), "price": float(row["Close"])}
+            return [], raw_currency
+
+        # Yahoo meldet Pence als "GBp" (kleines p!) oder vereinzelt "GBX" — nur das ist
+        # Pence. Echtes "GBP" (Grossbuchstaben) bleibt unangetastet.
+        is_pence = raw_currency == "GBp" or raw_currency.upper() == "GBX"
+        divisor = 100.0 if is_pence else 1.0
+        currency = "GBP" if is_pence else raw_currency
+
+        prices = [
+            {"date": str(idx.date()), "price": float(row["Close"]) / divisor}
             for idx, row in hist.iterrows()
             if not row["Close"] != row["Close"]  # skip NaN
         ]
+        return prices, currency
     except Exception as e:
         print(f"[Yahoo] Fehler bei {ticker}: {e}")
-        return []
+        return [], ""
 
 
 def _looks_like_isin(s: str) -> bool:
@@ -476,17 +497,18 @@ def _resolve_symbol(isin: str) -> str | None:
     return sym
 
 
-def fetch_price_history(ticker: str, years: int = 16) -> list[dict]:
-    prices = _yahoo_history(ticker, years)
+def fetch_price_history(ticker: str, years: int = 16) -> tuple[list[dict], str]:
+    """Liefert (Kurse, Waehrung) — Waehrung stammt von Yahoo, nicht vom ISIN-Praefix."""
+    prices, currency = _yahoo_history(ticker, years)
     if prices:
-        return prices
+        return prices, currency
     # Yahoo kennt die ISIN nicht -> via OpenFIGI das Symbol auflösen (gecacht) und erneut versuchen
     if _looks_like_isin(ticker):
         sym = _resolve_symbol(ticker)
         if sym and sym != ticker:
             print(f"[Yahoo] {ticker} -> {sym} (OpenFIGI)")
             return _yahoo_history(sym, years)
-    return prices
+    return prices, currency
 
 
 def calc_drawdown_metrics(prices: list[dict]) -> dict:
@@ -748,7 +770,7 @@ def sync_watchlist():
     for symbol, name in items:
         disp_name = name or symbol
         price, curr = fetch_current_quote(symbol)
-        hist = fetch_price_history(symbol)
+        hist, _ = fetch_price_history(symbol)
         dd = calc_drawdown_metrics(hist)
         ret = calc_15y_return(hist)
 
@@ -869,20 +891,10 @@ def run_sync():
     # portfolio_name -> { "YYYY-MM": kumulierter Wert in EUR }
     history: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
-    # DEBUG (temporaer): Duplikate in holdings pruefen
-    _ticker_counts = {}
-    for _h in holdings:
-        _ticker_counts[_h["ticker"]] = _ticker_counts.get(_h["ticker"], 0) + 1
-    _dupes = {t: c for t, c in _ticker_counts.items() if c > 1}
-    if _dupes:
-        print(f"[DEBUG] Duplikate in holdings-Liste gefunden: {_dupes}")
-    else:
-        print(f"[DEBUG] Keine Duplikate in holdings-Liste ({len(holdings)} Eintraege, {len(_ticker_counts)} unique)")
-
     for h in holdings:
         ticker = h["ticker"]
         print(f"[Yahoo] Historische Daten für {ticker}...")
-        prices = fetch_price_history(ticker, years=16)
+        prices, y_currency = fetch_price_history(ticker, years=16)
 
         if not prices:
             print(f"[Yahoo] Keine Daten für {ticker} — übersprungen.")
@@ -912,29 +924,31 @@ def run_sync():
 
         # Historische Portfolio-Wertentwicklung: aktuelle Stückzahl * historischer Kurs,
         # umgerechnet in EUR mit dem AKTUELLEN Wechselkurs (Näherung, keine historischen FX-Kurse).
+        # Waehrung kommt bevorzugt von Yahoo selbst (siehe _yahoo_history); ISIN-Praefix
+        # nur als Fallback, falls Yahoo keine liefert.
         quantity = h["quantity"] or 0
         if quantity <= 0:
             continue
-        curr = currency_for(h["isin"])
+        curr = y_currency or currency_for(h["isin"])
         rate = fx_rates.get(curr, 1.0) or 1.0
         portfolio_name = h.get("portfolio_name") or ""
+        current_value = h.get("current_value") or 0
 
-        for p in prices:
+        sorted_prices = sorted(prices, key=lambda x: x["date"])
+        latest_date = sorted_prices[-1]["date"] if sorted_prices else None
+
+        for p in sorted_prices:
             month = p["date"][:7]
             value_eur = quantity * p["price"] / rate
+            # Fuer den aktuellsten Monat: bei starker Abweichung (z.B. ein Aktiensplit,
+            # den Yahoos Monats-Kerze noch nicht beruecksichtigt) den authoritativen
+            # current_value von Parqet nehmen statt des moeglicherweise verzerrten Kurses.
+            if p["date"] == latest_date and current_value > 0:
+                ratio = value_eur / current_value
+                if ratio > 2.0 or ratio < 0.5:
+                    value_eur = current_value
             history[portfolio_name][month] += value_eur
             history["all"][month] += value_eur
-
-        # DEBUG (temporaer): letzten Monat mit current_value vergleichen
-        if portfolio_name == '⌛️ Aktien' and prices:
-            last_p = sorted(prices, key=lambda x: x["date"])[-1]
-            last_value_eur = quantity * last_p["price"] / rate
-            cv = h.get("current_value") or 0
-            ratio = (last_value_eur / cv) if cv else 0
-            flag = " <<<" if ratio > 1.5 or ratio < 0.67 else ""
-            print(f"[DEBUG-HIST] {ticker:16s} qty={quantity:10.3f} curr={curr:4s} rate={rate:8.3f} "
-                  f"letzter_kurs={last_p['price']:10.3f} ({last_p['date']}) -> {last_value_eur:10.2f}EUR "
-                  f"vs current_value={cv:10.2f}EUR ratio={ratio:5.2f}{flag}")
 
     with get_db() as db:
         for portfolio_name, months in history.items():
