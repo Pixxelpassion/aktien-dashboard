@@ -869,6 +869,16 @@ def run_sync():
     # portfolio_name -> { "YYYY-MM": kumulierter Wert in EUR }
     history: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
+    # DEBUG (temporaer): Duplikate in holdings pruefen
+    _ticker_counts = {}
+    for _h in holdings:
+        _ticker_counts[_h["ticker"]] = _ticker_counts.get(_h["ticker"], 0) + 1
+    _dupes = {t: c for t, c in _ticker_counts.items() if c > 1}
+    if _dupes:
+        print(f"[DEBUG] Duplikate in holdings-Liste gefunden: {_dupes}")
+    else:
+        print(f"[DEBUG] Keine Duplikate in holdings-Liste ({len(holdings)} Eintraege, {len(_ticker_counts)} unique)")
+
     for h in holdings:
         ticker = h["ticker"]
         print(f"[Yahoo] Historische Daten für {ticker}...")
@@ -914,6 +924,17 @@ def run_sync():
             value_eur = quantity * p["price"] / rate
             history[portfolio_name][month] += value_eur
             history["all"][month] += value_eur
+
+        # DEBUG (temporaer): letzten Monat mit current_value vergleichen
+        if portfolio_name == '⌛️ Aktien' and prices:
+            last_p = sorted(prices, key=lambda x: x["date"])[-1]
+            last_value_eur = quantity * last_p["price"] / rate
+            cv = h.get("current_value") or 0
+            ratio = (last_value_eur / cv) if cv else 0
+            flag = " <<<" if ratio > 1.5 or ratio < 0.67 else ""
+            print(f"[DEBUG-HIST] {ticker:16s} qty={quantity:10.3f} curr={curr:4s} rate={rate:8.3f} "
+                  f"letzter_kurs={last_p['price']:10.3f} ({last_p['date']}) -> {last_value_eur:10.2f}EUR "
+                  f"vs current_value={cv:10.2f}EUR ratio={ratio:5.2f}{flag}")
 
     with get_db() as db:
         for portfolio_name, months in history.items():
