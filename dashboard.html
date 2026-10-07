@@ -503,11 +503,11 @@ tbody td .ticker-badge{font-weight:400}
     <div class="target-row">
       <div class="form-group">
         <label>Kaufmarke (≥ → Alarm) <span id="buy-curr" style="color:var(--accent);font-weight:700"></span></label>
-        <input class="form-input" type="number" id="edit-buy" step="0.01" placeholder="z.B. 145.00">
+        <input class="form-input" type="number" id="edit-buy" step="any" placeholder="z.B. 145.00">
       </div>
       <div class="form-group">
         <label>Verkaufmarke (≤ → Alarm) <span id="sell-curr" style="color:var(--accent);font-weight:700"></span></label>
-        <input class="form-input" type="number" id="edit-sell" step="0.01" placeholder="z.B. 210.00">
+        <input class="form-input" type="number" id="edit-sell" step="any" placeholder="z.B. 210.00">
       </div>
     </div>
 
@@ -714,6 +714,15 @@ function getExchangeRate(isin, currencyOverride) {
 // UTILS
 // =============================================================================
 const fmt = (v, d=2) => v == null ? '—' : Number(v).toLocaleString('de-DE', {minimumFractionDigits:d,maximumFractionDigits:d});
+// Kurse unter 1 (z. B. Krypto wie VET, CHZ) mit 4 gueltigen Ziffern, sonst 2 Nachkommastellen
+const priceDecimals = (v) => {
+  const a = Math.abs(Number(v));
+  if (!a || a >= 1) return 2;
+  return Math.min(8, Math.max(2, Math.ceil(-Math.log10(a)) + 3));
+};
+const fmtPrice = (v) => v == null ? '—' : Number(v).toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:priceDecimals(v)});
+const roundPrice = (v) => +Number(v).toFixed(priceDecimals(v));
+const fmtEurPrice = (v) => v == null ? '—' : '€ ' + fmtPrice(v);
 const fmtEur = (v) => v == null ? '—' : '€ ' + fmt(v);
 const fmtPct = (v) => v == null ? '—' : (v>=0?'+':'') + fmt(v) + ' %';
 const colorPct = (v) => v == null ? 'neu' : v>0?'val-pos':'val-neg';
@@ -1079,11 +1088,11 @@ function renderTable() {
       const cls = sizeMap[h.position_size] || '';
       return `<span class="position-pill ${cls}">${h.position_size}</span>`;
     })() : DASH;
-    const ppCell  = isWL ? DASH : `${currLabel} ${fmt(conv(h.purchase_price))}`;
+    const ppCell  = isWL ? DASH : `${currLabel} ${fmtPrice(conv(h.purchase_price))}`;
     const cvCell  = isWL ? DASH : `${currLabel} ${fmt(conv(h.current_value))}`;
     const retCell = isWL ? DASH : `<span class="${colorPct(h.total_return_pct)}">${fmtPct(h.total_return_pct)}</span>`;
-    const buyCell  = h.buy_target!=null  ? `${buyStatus} ${currLabel} ${fmt(conv(h.buy_target))}`  : DASH;
-    const sellCell = h.sell_target!=null ? `${sellStatus} ${currLabel} ${fmt(conv(h.sell_target))}` : DASH;
+    const buyCell  = h.buy_target!=null  ? `${buyStatus} ${currLabel} ${fmtPrice(conv(h.buy_target))}`  : DASH;
+    const sellCell = h.sell_target!=null ? `${sellStatus} ${currLabel} ${fmtPrice(conv(h.sell_target))}` : DASH;
     const currTag = isWL ? `<span style="font-size:.7rem;color:var(--muted)">(${escHtml(h.currency||'')})</span>`
                          : (showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code||curr})</span>` : '');
 
@@ -1098,7 +1107,7 @@ function renderTable() {
         ${currTag}
       </td>
       <td data-col="purchase_price" style="text-align:right;color:var(--grey-text)">${ppCell}</td>
-      <td data-col="current_price" style="text-align:right;color:var(--grey-text)">${currLabel} ${fmt(cp)}</td>
+      <td data-col="current_price" style="text-align:right;color:var(--grey-text)">${currLabel} ${fmtPrice(cp)}</td>
       <td data-col="current_value" style="text-align:right;color:var(--grey-text)">${cvCell}</td>
       <td data-col="total_return_pct" style="text-align:right">${retCell}</td>
       <td data-col="stock_type">${typeBadge}</td>
@@ -1380,11 +1389,11 @@ async function openEditPanel(ticker) {
     return `${fmtPct(h.current_drawdown_pct)} / Typ: ${fmtPct(h.typical_drawdown)} ${status}`;
   })() : fmtPct(h.current_drawdown_pct);
 
-  const kursDisp = isWL ? `${currencySymbol(h.currency)} ${fmt(h.current_price)}` : fmtEur(h.current_price);
+  const kursDisp = isWL ? `${currencySymbol(h.currency)} ${fmtPrice(h.current_price)}` : fmtEurPrice(h.current_price);
   document.getElementById('panel-info').innerHTML = `
     <div class="panel-info-item"><div class="panel-info-label">Kurs</div><div class="panel-info-val">${kursDisp}</div></div>
     <div class="panel-info-item"><div class="panel-info-label">Größe</div><div class="panel-info-val">${isWL ? '—' : (h.position_size ? h.position_size : '(ungesetzt)')}</div></div>
-    <div class="panel-info-item"><div class="panel-info-label">Einstand</div><div class="panel-info-val">${isWL ? '—' : fmtEur(h.purchase_price)}</div></div>
+    <div class="panel-info-item"><div class="panel-info-label">Einstand</div><div class="panel-info-val">${isWL ? '—' : fmtEurPrice(h.purchase_price)}</div></div>
     <div class="panel-info-item"><div class="panel-info-label">Rendite</div><div class="panel-info-val ${isWL ? 'neu' : colorPct(h.total_return_pct)}">${isWL ? '—' : fmtPct(h.total_return_pct)}</div></div>
     <div class="panel-info-item"><div class="panel-info-label">DD aktuell vs. Typ</div><div class="panel-info-val ${colorPct(h.current_drawdown_pct)}">${ddComparison}</div></div>
     <div class="panel-info-item"><div class="panel-info-label">DD Max</div><div class="panel-info-val neg">${fmtPct(h.max_drawdown_pct)}</div></div>
@@ -1398,8 +1407,8 @@ async function openEditPanel(ticker) {
   // Watchlist: Marken nativ (keine Umrechnung).
   const tgtRate = (!isWL && showOriginalCurrency) ? getExchangeRate(h.isin, h.currency_override) : 1;
   const tgtCurr = isWL ? currencySymbol(h.currency) : getCurrencyLabel(h.isin, h.currency_override);
-  document.getElementById('edit-buy').value    = h.buy_target  != null ? +(h.buy_target  * tgtRate).toFixed(2) : '';
-  document.getElementById('edit-sell').value   = h.sell_target != null ? +(h.sell_target * tgtRate).toFixed(2) : '';
+  document.getElementById('edit-buy').value    = h.buy_target  != null ? roundPrice(h.buy_target  * tgtRate) : '';
+  document.getElementById('edit-sell').value   = h.sell_target != null ? roundPrice(h.sell_target * tgtRate) : '';
   document.getElementById('buy-curr').textContent  = tgtCurr;
   document.getElementById('sell-curr').textContent = tgtCurr;
   document.getElementById('edit-notes').value  = h.notes || '';
@@ -1560,11 +1569,11 @@ async function openAlarms() {
       const label = a.alarm_type==='buy' ? '🟢 KAUF' : '🔴 VERK.';
       // Preis in Originalwährung (falls beim Auslösen gespeichert), sonst EUR
       const priceStr = (a.display_price != null && a.currency)
-        ? `${currencySymbol(a.currency)} ${fmt(a.display_price)}`
-        : fmtEur(a.price);
+        ? `${currencySymbol(a.currency)} ${fmtPrice(a.display_price)}`
+        : fmtEurPrice(a.price);
       const targetVal = a.alarm_type==='buy' ? a.buy_target : a.sell_target;
       const targetStr = targetVal != null
-        ? `${(a.display_price != null && a.currency) ? currencySymbol(a.currency) : '€'} ${fmt(targetVal)}`
+        ? `${(a.display_price != null && a.currency) ? currencySymbol(a.currency) : '€'} ${fmtPrice(targetVal)}`
         : '—';
       return `<div class="alarm-row${isOld ? ' is-old' : ''}">
         <span class="${typeCls}">${label}</span>
