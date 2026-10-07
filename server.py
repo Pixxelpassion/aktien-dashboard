@@ -149,6 +149,14 @@ def init_db():
         except:
             pass
 
+        # yahoo_symbol: manuelles Kurssymbol (z. B. Krypto "SUI20947-USD"), "-" = keine Yahoo-Quelle
+        # target_currency: '' = Marken in EUR gespeichert (Altbestand), sonst Währung der Marken (Krypto: USD)
+        for col in ("yahoo_symbol", "target_currency"):
+            try:
+                db.execute(f"ALTER TABLE annotations ADD COLUMN {col} TEXT DEFAULT ''")
+            except:
+                pass
+
         # alarm_log: Währung + Anzeigepreis (Originalwährung) für bestehende DBs
         try:
             db.execute("ALTER TABLE alarm_log ADD COLUMN currency TEXT DEFAULT ''")
@@ -172,6 +180,8 @@ def init_db():
             position_size     TEXT DEFAULT '',
             typical_drawdown  REAL,
             report_url        TEXT DEFAULT '',
+            yahoo_symbol      TEXT DEFAULT '',
+            target_currency   TEXT DEFAULT '',
             updated_at        TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS metrics (
@@ -267,8 +277,42 @@ def _backfill_alarm_currency():
         print(f"[Migration] Backfill übersprungen: {e}")
 
 
+def _migrate_crypto_targets():
+    """Krypto-Marken (bisher in EUR gespeichert) einmalig in USD umrechnen."""
+    try:
+        from sync import is_crypto, currency_for
+        with get_db() as db:
+            rates = {r["currency"]: r["rate"] for r in
+                     db.execute("SELECT currency, rate FROM exchange_rates").fetchall()}
+            rows = db.execute("""
+                SELECT a.ticker, a.buy_target, a.sell_target, a.currency_override, h.isin
+                FROM annotations a JOIN holdings h ON h.ticker = a.ticker
+                WHERE COALESCE(a.target_currency, '') = ''
+                  AND (a.buy_target IS NOT NULL OR a.sell_target IS NOT NULL)
+            """).fetchall()
+            n = 0
+            for r in rows:
+                if not is_crypto(r["isin"]):
+                    continue
+                curr = currency_for(r["isin"], r["currency_override"] or "")
+                rate = rates.get(curr)
+                if not rate:
+                    continue
+                # Bedingung im UPDATE: gunicorn startet mehrere Worker, nur einer darf umrechnen
+                n += db.execute("""UPDATE annotations SET buy_target=?, sell_target=?, target_currency=?
+                                   WHERE ticker=? AND COALESCE(target_currency, '') = ''""",
+                                (r["buy_target"] * rate if r["buy_target"] is not None else None,
+                                 r["sell_target"] * rate if r["sell_target"] is not None else None,
+                                 curr, r["ticker"])).rowcount
+            if n:
+                print(f"[Migration] {n} Krypto-Marken von EUR in USD umgerechnet.")
+    except Exception as e:
+        print(f"[Migration] Krypto-Marken übersprungen: {e}")
+
+
 init_db()
 _backfill_alarm_currency()
+_migrate_crypto_targets()
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +427,7 @@ def api_portfolio():
                 h.current_price, h.current_value, h.total_return_pct, h.weight, h.synced_at,
                 h.portfolio_name,
                 a.stock_type, a.sector, a.country, a.buy_target, a.sell_target, a.notes, a.currency_override, a.position_size, a.typical_drawdown, a.report_url,
+                a.yahoo_symbol, a.target_currency,
                 m.avg_drawdown_pct, m.max_drawdown_pct, m.current_drawdown_pct,
                 m.return_15y_pct, m.return_15y_cagr
             FROM holdings h
@@ -392,6 +437,10 @@ def api_portfolio():
             ORDER BY h.portfolio_name, h.current_value DESC
         """).fetchall()
         holdings = [dict(r) for r in rows]
+
+    from sync import yahoo_symbol_for
+    for h in holdings:
+        h["yahoo_symbol_auto"] = yahoo_symbol_for(h["ticker"], h["isin"] or "")
 
     total_value = sum(h["current_value"] or 0 for h in holdings)
     total_cost  = sum((h["quantity"] or 0) * (h["purchase_price"] or 0) for h in holdings)
@@ -431,8 +480,8 @@ def api_annotations(ticker: str):
     with get_db() as db:
         db.execute("""
             INSERT INTO annotations
-                (ticker, stock_type, sector, country, buy_target, sell_target, notes, currency_override, position_size, typical_drawdown, report_url, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+                (ticker, stock_type, sector, country, buy_target, sell_target, notes, currency_override, position_size, typical_drawdown, report_url, yahoo_symbol, target_currency, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
             ON CONFLICT(ticker) DO UPDATE SET
                 stock_type         = excluded.stock_type,
                 sector             = excluded.sector,
@@ -444,6 +493,8 @@ def api_annotations(ticker: str):
                 position_size      = excluded.position_size,
                 typical_drawdown   = excluded.typical_drawdown,
                 report_url         = excluded.report_url,
+                yahoo_symbol       = excluded.yahoo_symbol,
+                target_currency    = excluded.target_currency,
                 updated_at         = excluded.updated_at
         """, (
             ticker,
@@ -457,6 +508,8 @@ def api_annotations(ticker: str):
             data.get("position_size", ""),
             data.get("typical_drawdown") or None,
             data.get("report_url", ""),
+            (data.get("yahoo_symbol") or "").strip().upper(),
+            (data.get("target_currency") or "").upper(),
         ))
     return jsonify({"ok": True})
 
@@ -488,7 +541,9 @@ def api_alarms():
         rows = db.execute("""
             SELECT al.*, COALESCE(h.name, w.name) AS name,
                    COALESCE(a.buy_target, w.buy_target) AS buy_target,
-                   COALESCE(a.sell_target, w.sell_target) AS sell_target
+                   COALESCE(a.sell_target, w.sell_target) AS sell_target,
+                   CASE WHEN w.symbol IS NOT NULL THEN w.currency
+                        ELSE COALESCE(a.target_currency, '') END AS target_currency
             FROM alarm_log al
             LEFT JOIN holdings     h ON h.ticker = al.ticker
             LEFT JOIN annotations  a ON a.ticker = al.ticker

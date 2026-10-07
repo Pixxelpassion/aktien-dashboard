@@ -544,6 +544,11 @@ tbody td .ticker-badge{font-weight:400}
       </select>
       <span style="font-size:.73rem;color:var(--muted)">Überschreibt Automatik wenn nötig (z.B. Samsung GDR → KRW).</span>
     </div>
+    <div class="form-group" id="yahoo-symbol-group">
+      <label>📈 Kurssymbol (Yahoo)</label>
+      <input class="form-input" type="text" id="edit-yahoo-symbol" placeholder="automatisch">
+      <span style="font-size:.73rem;color:var(--muted)">Quelle für Drawdown und 15J-Werte. Leer = automatisch, „-“ = keine Quelle (z. B. Coins, die Yahoo nicht kennt).</span>
+    </div>
     <div class="form-group">
       <label>Positionsgröße</label>
       <select class="form-select" id="edit-position-size">
@@ -699,10 +704,25 @@ function getCurrency(isin, currencyOverride) {
   if (currencyOverride) {
     return currencyOverride.toUpperCase();
   }
+  // Krypto (keine ISIN, nur Kuerzel wie BTC/CHZ): immer USD
+  if (isCrypto(isin)) return 'USD';
   // Fall back to ISIN-Prefix mapping
-  if (!isin || isin.length < 2) return currencyMap.default;
   const prefix = isin.substring(0, 2).toUpperCase();
   return currencyMap[prefix] || currencyMap.default;
+}
+
+function isCrypto(isin) {
+  return !/^[A-Z]{2}[A-Z0-9]{10}$/i.test(isin || '');
+}
+
+// Krypto-Marken werden in USD gespeichert (target_currency), alle anderen in EUR.
+// Beim Laden auf EUR normalisieren, damit Anzeige/Vergleich wie bisher funktionieren.
+function normalizeTargets(h) {
+  const tc = (h.target_currency || '').toUpperCase();
+  if (!tc || tc === 'EUR' || h.is_watchlist) return;
+  const rate = exchangeRates[tc] || 1.0;
+  if (h.buy_target  != null) h.buy_target  = h.buy_target  / rate;
+  if (h.sell_target != null) h.sell_target = h.sell_target / rate;
 }
 
 function getExchangeRate(isin, currencyOverride) {
@@ -794,6 +814,7 @@ async function loadPortfolio() {
     await loadExchangeRates();
     const data = await fetch('/api/portfolio').then(r=>r.json());
     allHoldings = data.holdings || [];
+    allHoldings.forEach(normalizeTargets);
     summary = data.summary || {};
     // Watchlist-Werte anhängen (eigener Tab, kein Portfolio)
     try {
@@ -1416,6 +1437,10 @@ async function openEditPanel(ticker) {
   document.getElementById('edit-position-size').value = h.position_size || '';
   document.getElementById('edit-typical-dd').value = h.typical_drawdown != null ? h.typical_drawdown : '';
   document.getElementById('edit-report-url').value = h.report_url || '';
+  document.getElementById('edit-yahoo-symbol').value = h.yahoo_symbol || '';
+  document.getElementById('edit-yahoo-symbol').placeholder =
+    h.yahoo_symbol_auto ? `automatisch: ${h.yahoo_symbol_auto}` : 'automatisch: keine Quelle';
+  document.getElementById('yahoo-symbol-group').style.display = isWL ? 'none' : '';
 
   // Zeige auto-erkannte Währung
   const autoCurrency = isWL ? (h.currency || '—') : getCurrency(h.isin);
@@ -1443,14 +1468,21 @@ async function saveAnnotation() {
   // Anzeige-Währung -> zur Speicherung nach EUR zurückrechnen.
   const ovr = document.getElementById('edit-currency').value || '';
   const tgtRate = (!isWL && showOriginalCurrency && editH) ? getExchangeRate(editH.isin, ovr) : 1;
+  // Krypto: Marken in der Originalwährung (USD) speichern, damit sie bei EUR/USD-Schwankung fix bleiben
+  const nativeCurr = (!isWL && editH && isCrypto(editH.isin)) ? getCurrency(editH.isin, ovr) : '';
+  const nativeRate = nativeCurr ? (exchangeRates[nativeCurr] || 1.0) : 1;
+  const buyEur  = buy  ? parseFloat(buy)  / tgtRate : null;
+  const sellEur = sell ? parseFloat(sell) / tgtRate : null;
 
   const typicalDd = document.getElementById('edit-typical-dd').value;
   const body = {
     stock_type:        document.getElementById('edit-type').value,
     sector:            document.getElementById('edit-sector').value,
     country:           document.getElementById('edit-country').value,
-    buy_target:        buy  ? parseFloat(buy)  / tgtRate : null,
-    sell_target:       sell ? parseFloat(sell) / tgtRate : null,
+    buy_target:        buyEur  != null ? buyEur  * nativeRate : null,
+    sell_target:       sellEur != null ? sellEur * nativeRate : null,
+    target_currency:   nativeCurr,
+    yahoo_symbol:      document.getElementById('edit-yahoo-symbol').value.trim().toUpperCase(),
     notes:             document.getElementById('edit-notes').value,
     currency_override: document.getElementById('edit-currency').value || '',
     position_size:     document.getElementById('edit-position-size').value || '',
@@ -1465,7 +1497,7 @@ async function saveAnnotation() {
     });
     // Update local state
     const idx = allHoldings.findIndex(h=>h.ticker===editTicker);
-    if (idx>=0) Object.assign(allHoldings[idx], body);
+    if (idx>=0) Object.assign(allHoldings[idx], body, {buy_target: buyEur, sell_target: sellEur});
     closeEditPanel();
     renderSummary();
     renderTable();
@@ -1489,6 +1521,7 @@ async function clearAnnotation() {
   document.getElementById('edit-position-size').value = '';
   document.getElementById('edit-typical-dd').value = '';
   document.getElementById('edit-report-url').value = '';
+  document.getElementById('edit-yahoo-symbol').value = '';
   await saveAnnotation();
 }
 
@@ -1572,9 +1605,12 @@ async function openAlarms() {
         ? `${currencySymbol(a.currency)} ${fmtPrice(a.display_price)}`
         : fmtEurPrice(a.price);
       const targetVal = a.alarm_type==='buy' ? a.buy_target : a.sell_target;
-      const targetStr = targetVal != null
-        ? `${(a.display_price != null && a.currency) ? currencySymbol(a.currency) : '€'} ${fmtPrice(targetVal)}`
-        : '—';
+      // Marke in die Währung des Alarms bringen: gespeichert in EUR (Altbestand) oder in target_currency
+      const tc = (a.target_currency || 'EUR').toUpperCase();
+      const showCurr = (a.display_price != null && a.currency) ? a.currency.toUpperCase() : 'EUR';
+      const targetDisp = targetVal == null ? null
+        : (tc === showCurr ? targetVal : targetVal / (exchangeRates[tc] || 1) * (exchangeRates[showCurr] || 1));
+      const targetStr = targetDisp != null ? `${currencySymbol(showCurr)} ${fmtPrice(targetDisp)}` : '—';
       return `<div class="alarm-row${isOld ? ' is-old' : ''}">
         <span class="${typeCls}">${label}</span>
         <span class="alarm-name">${escHtml(a.name||a.ticker)}</span>

@@ -511,6 +511,19 @@ def fetch_price_history(ticker: str, years: int = 16) -> tuple[list[dict], str]:
     return prices, currency
 
 
+def cut_spliced_history(prices: list[dict], max_jump: float = 20.0) -> list[dict]:
+    """Yahoo fuehrt manche Krypto-Symbole erst fuer einen anderen Coin und haengt den neuen an
+    (TIA-USD: bis 2024 ~0,01 $, ab 2025 Celestia ~2,70 $). Alles vor dem letzten Monatssprung
+    > max_jump verwerfen, sonst sind Drawdown und Rendite Unsinn."""
+    s = sorted(prices, key=lambda x: x["date"])
+    start = 0
+    for i in range(1, len(s)):
+        a, b = s[i - 1]["price"], s[i]["price"]
+        if a > 0 and b > 0 and (b / a > max_jump or a / b > max_jump):
+            start = i
+    return s[start:]
+
+
 def calc_drawdown_metrics(prices: list[dict]) -> dict:
     if len(prices) < 6:
         return {"avg_drawdown_pct": None, "max_drawdown_pct": None, "current_drawdown_pct": None}
@@ -605,12 +618,41 @@ CURRENCY_SYMBOLS = {'USD':'$','DKK':'kr','GBP':'£','SEK':'kr','CHF':'CHF','JPY'
                     'CNY':'¥','INR':'₹','EUR':'€','HKD':'HK$','SGD':'S$','CAD':'C$',
                     'AUD':'A$','KRW':'₩','BRL':'R$'}
 
+def is_crypto(isin: str) -> bool:
+    """Krypto hat bei Parqet keine ISIN, dort steht nur das Kuerzel (BTC, CHZ, ...)."""
+    return not _looks_like_isin(isin or "")
+
+
 def currency_for(isin: str, override: str = "") -> str:
     if override:
         return override.upper()
-    if not isin or len(isin) < 2:
+    # Krypto: immer USD (sonst wuerde z. B. CHZ ueber das Praefix "CH" zu CHF)
+    if is_crypto(isin):
         return 'USD'
     return CURRENCY_MAP.get(isin[:2].upper(), 'USD')
+
+
+# Krypto-Kuerzel, die Yahoo nicht unter "<KUERZEL>-USD" fuehrt. "" = keine Yahoo-Quelle
+# (ONE ist bei Yahoo Harmony, im Portfolio aber BigONE).
+CRYPTO_YAHOO_SYMBOLS = {"SUI": "SUI20947-USD", "RON": "RON14101-USD",
+                        "ONE": "", "BEST": "", "VSN": ""}
+
+
+def yahoo_symbol_for(ticker: str, isin: str, override: str = "") -> str:
+    """Yahoo-Symbol fuer Kurshistorie. Manuelles Symbol hat Vorrang, "-" = keine Quelle."""
+    override = (override or "").strip().upper()
+    if override:
+        return "" if override == "-" else override
+    if is_crypto(isin):
+        return CRYPTO_YAHOO_SYMBOLS.get(ticker, f"{ticker}-USD")
+    return ticker
+
+
+def target_to_eur(target: float | None, target_currency: str, rates: dict) -> float | None:
+    """Marken sind in EUR (Altbestand, target_currency leer) oder in target_currency gespeichert."""
+    if target is None or not target_currency or target_currency == "EUR":
+        return target
+    return target / (rates.get(target_currency) or 1.0)
 
 def currency_symbol(code: str) -> str:
     return CURRENCY_SYMBOLS.get((code or '').upper(), code or '')
@@ -902,13 +944,24 @@ def run_sync():
     # portfolio_name -> { "YYYY-MM": kumulierter Wert in EUR }
     history: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
 
+    with get_db() as db:
+        symbol_overrides = {r["ticker"]: r["yahoo_symbol"] or "" for r in
+                            db.execute("SELECT ticker, yahoo_symbol FROM annotations").fetchall()}
+
     for h in holdings:
         ticker = h["ticker"]
-        print(f"[Yahoo] Historische Daten für {ticker}...")
-        prices, y_currency = fetch_price_history(ticker, years=16)
+        symbol = yahoo_symbol_for(ticker, h["isin"], symbol_overrides.get(ticker, ""))
+        print(f"[Yahoo] Historische Daten für {ticker} ({symbol or 'keine Quelle'})...")
+        prices, y_currency = fetch_price_history(symbol, years=16) if symbol else ([], "")
+        if prices and is_crypto(h["isin"]):
+            prices = cut_spliced_history(prices)
 
         if not prices:
             print(f"[Yahoo] Keine Daten für {ticker} — übersprungen.")
+            if is_crypto(h["isin"]):
+                # Alte Kennzahlen stammten evtl. von einer gleichnamigen Aktie (z. B. LINK) -> weg damit
+                with get_db() as db:
+                    db.execute("DELETE FROM metrics WHERE ticker=?", (ticker,))
             continue
 
         dd = calc_drawdown_metrics(prices)
@@ -980,7 +1033,7 @@ def run_sync():
                  db.execute("SELECT currency, rate FROM exchange_rates").fetchall()}
         rows = db.execute("""
             SELECT h.ticker, h.name, h.isin, h.current_price,
-                   a.buy_target, a.sell_target, a.currency_override
+                   a.buy_target, a.sell_target, a.currency_override, a.target_currency
             FROM holdings h
             JOIN annotations a ON h.ticker = a.ticker
             WHERE a.buy_target IS NOT NULL OR a.sell_target IS NOT NULL
@@ -990,8 +1043,10 @@ def run_sync():
             ticker = row["ticker"]
             name = row["name"] or ticker
             price = row["current_price"] or 0.0
-            buy_t = row["buy_target"]
-            sell_t = row["sell_target"]
+            # Vergleich in EUR; Krypto-Marken liegen in USD und werden mit dem Tageskurs umgerechnet,
+            # damit die Marke in USD fix bleibt (wie in TradingView)
+            buy_t = target_to_eur(row["buy_target"], row["target_currency"] or "", rates)
+            sell_t = target_to_eur(row["sell_target"], row["target_currency"] or "", rates)
             # Preise in Originalwährung umrechnen (wie im Dashboard): EUR * Kurs
             curr = currency_for(row["isin"], row["currency_override"] or "")
             rate = rates.get(curr, 1.0)
