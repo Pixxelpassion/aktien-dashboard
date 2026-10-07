@@ -365,6 +365,8 @@ tbody td .ticker-badge{font-weight:400}
         <div class="col-menu" id="col-menu"></div>
       </div>
       <button class="btn btn-primary" id="watchlist-add-btn" style="display:none" onclick="addWatchlistItem()">+ Wert hinzufügen</button>
+      <button class="btn btn-outline" id="snapshot-create-btn" style="display:none" onclick="createSnapshot()" title="Portfolio einfrieren und hypothetisch weiterverfolgen">📸 Snapshot erstellen</button>
+      <button class="btn btn-outline" id="snapshot-delete-btn" style="display:none" onclick="deleteSnapshot()">Snapshot löschen</button>
       <div class="table-spacer"></div>
       <span style="font-size:.76rem;color:var(--muted)">Klick auf Zeile zum Bearbeiten</span>
     </div>
@@ -711,6 +713,10 @@ function getCurrency(isin, currencyOverride) {
   return currencyMap[prefix] || currencyMap.default;
 }
 
+// Zählt zu "Alle Portfolios" und Szenario: nur echter Bestand, keine Watchlist, keine Snapshots
+const inAll = (h) => !h.is_watchlist && !h.is_snapshot;
+const snapshotOf = (portfolio) => allHoldings.find(h => h.is_snapshot && h.portfolio_name === portfolio);
+
 function isCrypto(isin) {
   return !/^[A-Z]{2}[A-Z0-9]{10}$/i.test(isin || '');
 }
@@ -821,6 +827,11 @@ async function loadPortfolio() {
       const wl = await fetch('/api/watchlist').then(r=>r.json());
       if (Array.isArray(wl)) allHoldings = allHoldings.concat(wl);
     } catch(e) { console.error('Watchlist-Fehler:', e); }
+    // Snapshots anhängen (eigene Tabs, zählen nicht zu "Alle")
+    try {
+      const snaps = await fetch('/api/snapshots').then(r=>r.json());
+      if (Array.isArray(snaps)) { snaps.forEach(normalizeTargets); allHoldings = allHoldings.concat(snaps); }
+    } catch(e) { console.error('Snapshot-Fehler:', e); }
     buildPortfolioTabs();
     // Standard-Tab: "Aktien" wenn vorhanden, sonst "Alle Portfolios"
     const aktienTab = [...document.querySelectorAll('.tab-btn')]
@@ -884,7 +895,9 @@ function buildPortfolioTabs() {
     }
   }
   const WL = '👀 Watchlist';
-  const sorted = Array.from(portfolios).filter(p => p !== WL).sort();
+  const snapNames = new Set(allHoldings.filter(h => h.is_snapshot).map(h => h.portfolio_name));
+  const sorted = Array.from(portfolios).filter(p => p !== WL && !snapNames.has(p)).sort();
+  sorted.push(...snapNames);  // Snapshots hinter den echten Portfolios
   sorted.push(WL);   // Watchlist-Tab immer anzeigen (auch wenn leer) — sonst kein Weg zum Hinzufügen
   console.log('Found portfolios:', sorted);
 
@@ -904,6 +917,10 @@ function switchPortfolio(portfolio) {
   document.querySelector(`[data-portfolio="${portfolio}"]`).classList.add('active');
   const addBtn = document.getElementById('watchlist-add-btn');
   if (addBtn) addBtn.style.display = (portfolio === '👀 Watchlist') ? '' : 'none';
+  const isSnap = !!snapshotOf(portfolio);
+  const isRealPortfolio = portfolio !== 'all' && portfolio !== '👀 Watchlist' && !isSnap;
+  document.getElementById('snapshot-create-btn').style.display = isRealPortfolio ? '' : 'none';
+  document.getElementById('snapshot-delete-btn').style.display = isSnap ? '' : 'none';
   // Szenario zurücksetzen beim Portfolio-Wechsel
   scenarioIncluded.clear();
   const warningEl = document.getElementById('scenario-warning');
@@ -927,6 +944,35 @@ async function addWatchlistItem() {
   } catch(e) { toast('Fehler beim Hinzufügen', 'error'); }
 }
 
+async function createSnapshot() {
+  const pf = currentPortfolio;
+  const name = prompt(`Snapshot von "${pf}" erstellen.\n\nAlle Positionen werden mit Stückzahl, Kursen und Annotationen eingefroren ` +
+    `und laufen danach hypothetisch weiter. Name:`, `📸 ${pf} · ${new Date().toLocaleDateString('de-DE')}`);
+  if (name === null) return;
+  try {
+    const r = await fetch('/api/snapshots', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({portfolio: pf, name: name.trim()})
+    }).then(r=>r.json());
+    if (!r.ok) { toast(r.error || 'Fehler', 'error'); return; }
+    toast('Snapshot erstellt ✓ Kurse werden im Hintergrund geladen', 'success');
+    await loadPortfolio();
+    const snap = allHoldings.find(h => h.is_snapshot && h.snapshot_id === r.id);
+    if (snap) switchPortfolio(snap.portfolio_name);
+  } catch(e) { toast('Fehler beim Erstellen', 'error'); }
+}
+
+async function deleteSnapshot() {
+  const snap = snapshotOf(currentPortfolio);
+  if (!snap) return;
+  if (!confirm(`Snapshot "${snap.portfolio_name}" endgültig löschen?\n\nDie eingefrorenen Daten sind danach weg.`)) return;
+  try {
+    await fetch(`/api/snapshots/${snap.snapshot_id}`, {method: 'DELETE'});
+    toast('Snapshot gelöscht ✓', 'success');
+    await loadPortfolio();
+  } catch(e) { toast('Fehler beim Löschen', 'error'); }
+}
+
 async function removeWatchlistItem(symbol) {
   if (!confirm(`"${symbol}" aus der Watchlist entfernen?`)) return;
   try {
@@ -943,10 +989,11 @@ async function removeWatchlistItem(symbol) {
 // =============================================================================
 function renderSummary() {
   const filtered = currentPortfolio === 'all'
-    ? allHoldings.filter(h => !h.is_watchlist)
+    ? allHoldings.filter(inAll)
     : allHoldings.filter(h => h.portfolio_name === currentPortfolio);
 
   const isWatchlistTab = currentPortfolio === '👀 Watchlist';
+  const snap = snapshotOf(currentPortfolio);
   const total_value = filtered.reduce((s,h) => s + (h.current_value || 0), 0);
   const total_cost = filtered.reduce((s,h) => s + (h.quantity || 0) * (h.purchase_price || 0), 0);
   const total_ret = total_cost > 0 ? ((total_value / total_cost) - 1) * 100 : 0;
@@ -959,6 +1006,17 @@ function renderSummary() {
     retEl.textContent = '—';
     retEl.className = 'card-value neu';
     document.getElementById('total-return-abs').textContent = 'kein Bestand';
+  } else if (snap) {
+    // Snapshot: Wert heute (hypothetisch) gegen den Wert am Stichtag; Rendite ggü. Einstand als Zusatz
+    const snapValue = filtered.reduce((s,h) => s + (h.value_at_snapshot || 0), 0);
+    const sinceSnap = snapValue > 0 ? (total_value / snapValue - 1) * 100 : 0;
+    const snapDate = new Date(snap.snapshot_created_at.replace(' ','T')+'Z').toLocaleDateString('de-DE');
+    document.getElementById('total-value').textContent = fmtEur(total_value);
+    document.getElementById('total-cost').textContent = `Am ${snapDate}: ${fmtEur(snapValue)}`;
+    retEl.textContent = fmtPct(sinceSnap);
+    retEl.className = 'card-value ' + colorPct(sinceSnap);
+    document.getElementById('total-return-abs').textContent =
+      `${fmtEur(total_value - snapValue)} seit Snapshot · ggü. Einstand ${fmtPct(total_ret)}`;
   } else {
     document.getElementById('total-value').textContent = fmtEur(total_value);
     document.getElementById('total-cost').textContent = 'Einstand: ' + fmtEur(total_cost);
@@ -1057,7 +1115,7 @@ function renderTable() {
   const typF = document.getElementById('type-filter').value;
 
   let rows = allHoldings.filter(h => {
-    if (currentPortfolio === 'all') { if (h.is_watchlist) return false; }
+    if (currentPortfolio === 'all') { if (!inAll(h)) return false; }
     else if (h.portfolio_name !== currentPortfolio) return false;
     if (q && !h.ticker.toLowerCase().includes(q) && !h.name?.toLowerCase().includes(q)) return false;
     if (secF && h.sector !== secF) return false;
@@ -1111,13 +1169,21 @@ function renderTable() {
     })() : DASH;
     const ppCell  = isWL ? DASH : `${currLabel} ${fmtPrice(conv(h.purchase_price))}`;
     const cvCell  = isWL ? DASH : `${currLabel} ${fmt(conv(h.current_value))}`;
-    const retCell = isWL ? DASH : `<span class="${colorPct(h.total_return_pct)}">${fmtPct(h.total_return_pct)}</span>`;
+    const retCell = isWL ? DASH
+      : h.is_snapshot
+        // Snapshot: Veränderung seit Stichtag, darunter die Rendite ggü. Einstand
+        ? `<span class="${colorPct(h.change_since_snapshot_pct)}" title="seit Snapshot">${fmtPct(h.change_since_snapshot_pct)}</span>` +
+          `<div style="font-size:.7rem;color:var(--muted)" title="ggü. Einstand">Einst. ${fmtPct(h.total_return_pct)}</div>`
+        : `<span class="${colorPct(h.total_return_pct)}">${fmtPct(h.total_return_pct)}</span>`;
+    const frozenTag = (h.is_snapshot && !h.price_ok)
+      ? ' <span style="font-size:.7rem;color:var(--muted)" title="Keine Kursquelle — bleibt auf dem Kurs vom Stichtag">❄️ eingefroren</span>' : '';
     const buyCell  = h.buy_target!=null  ? `${buyStatus} ${currLabel} ${fmtPrice(conv(h.buy_target))}`  : DASH;
     const sellCell = h.sell_target!=null ? `${sellStatus} ${currLabel} ${fmtPrice(conv(h.sell_target))}` : DASH;
     const currTag = isWL ? `<span style="font-size:.7rem;color:var(--muted)">(${escHtml(h.currency||'')})</span>`
                          : (showOriginalCurrency ? `<span style="font-size:.7rem;color:var(--muted)">(${curr.code||curr})</span>` : '');
 
-    return `<tr onclick="openEditPanel('${h.ticker}')">
+    // Snapshot-Zeilen sind eingefroren: kein Bearbeiten (würde sonst die Annotation der echten Position ändern)
+    return `<tr ${h.is_snapshot ? 'style="cursor:default"' : `onclick="openEditPanel('${h.ticker}')"`}>
       <td data-col="scenario" style="text-align:center;padding:0" onclick="event.stopPropagation()">
         <input type="checkbox" class="scenario-checkbox" data-ticker="${h.ticker}" checked
                onchange="updateScenarioTable()" style="cursor:pointer;margin:.3rem">
@@ -1125,7 +1191,7 @@ function renderTable() {
       <td data-col="position_size" style="text-align:center">${posPill}</td>
       <td data-col="name" class="name-cell">
         ${reportLinkHtml(h)}
-        ${currTag}
+        ${currTag}${frozenTag}
       </td>
       <td data-col="purchase_price" style="text-align:right;color:var(--grey-text)">${ppCell}</td>
       <td data-col="current_price" style="text-align:right;color:var(--grey-text)">${currLabel} ${fmtPrice(cp)}</td>
@@ -1261,9 +1327,14 @@ async function loadHistoryChart() {
     return;
   }
 
+  // Snapshot: Tagesverlauf seit Stichtag statt Monats-Rückrechnung
+  const snap = snapshotOf(requestedPortfolio);
   let rows = [];
   try {
-    rows = await fetch(`/api/portfolio-history?portfolio=${encodeURIComponent(requestedPortfolio)}`).then(r => r.json());
+    rows = snap
+      ? (await fetch(`/api/snapshots/${snap.snapshot_id}/history`).then(r => r.json()))
+          .map(r => ({month: new Date(r.date).toLocaleDateString('de-DE'), value_eur: r.value_eur}))
+      : await fetch(`/api/portfolio-history?portfolio=${encodeURIComponent(requestedPortfolio)}`).then(r => r.json());
   } catch (e) {
     rows = [];
   }
@@ -1272,7 +1343,8 @@ async function loadHistoryChart() {
   if (requestedPortfolio !== currentPortfolio) return;
 
   if (historyChart) { historyChart.destroy(); historyChart = null; }
-  label.textContent = requestedPortfolio === 'all' ? 'Alle Portfolios' : requestedPortfolio;
+  label.textContent = requestedPortfolio === 'all' ? 'Alle Portfolios'
+    : snap ? `${requestedPortfolio} (hypothetisch, seit Stichtag)` : requestedPortfolio;
 
   if (!rows.length) {
     canvas.classList.add('hidden');
@@ -1330,7 +1402,7 @@ function setAllocDim(dim) {
 
 function renderSectorChart() {
   const filtered = currentPortfolio === 'all'
-    ? allHoldings
+    ? allHoldings.filter(inAll)
     : allHoldings.filter(h => h.portfolio_name === currentPortfolio);
 
   const dim = allocDimension;
@@ -1641,7 +1713,7 @@ function updateScenarioTable() {
   const checked = [...document.querySelectorAll('.scenario-checkbox:checked')].map(c => c.dataset.ticker);
 
   // Setze scenarioIncluded = AUSGESCHLOSSENE Positionen
-  const filtered = allHoldings.filter(h => !h.is_watchlist && (currentPortfolio === 'all' || h.portfolio_name === currentPortfolio));
+  const filtered = allHoldings.filter(h => currentPortfolio === 'all' ? inAll(h) : (!h.is_watchlist && h.portfolio_name === currentPortfolio));
   if (checked.length === filtered.length) {
     // Alle angehakt -> Szenario = alles rein (keine Ausschlüsse)
     scenarioIncluded.clear();
@@ -1688,8 +1760,8 @@ function openScenarioModal() {
   const modal = document.getElementById('scenario-modal');
   modal.classList.add('open');
 
-  // Alle Portfolio-Positionen auflisten (ohne Watchlist)
-  const positions = allHoldings.filter(h => !h.is_watchlist && h.portfolio_name !== '👀 Watchlist');
+  // Alle Portfolio-Positionen auflisten (ohne Watchlist und Snapshots)
+  const positions = allHoldings.filter(h => inAll(h) && h.portfolio_name !== '👀 Watchlist');
   const list = document.getElementById('scenario-list');
 
   if (positions.length === 0) {
@@ -1723,7 +1795,7 @@ function updateScenario() {
 }
 
 function renderScenarioResults() {
-  const positions = allHoldings.filter(h => !h.is_watchlist && h.portfolio_name !== '👀 Watchlist');
+  const positions = allHoldings.filter(h => inAll(h) && h.portfolio_name !== '👀 Watchlist');
 
   // Filtere auf nicht-ausgeschlossene Positionen
   const included = positions.filter(h => !scenarioExcluded.has(h.ticker));

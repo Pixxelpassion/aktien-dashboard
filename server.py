@@ -240,6 +240,53 @@ def init_db():
             synced_at            TEXT DEFAULT (datetime('now'))
         );
         """)
+        # Snapshots: eingefrorene Portfolios, die hypothetisch weiterlaufen (Sync fasst sie nie an).
+        # Preise in EUR wie bei holdings; current_price wird taeglich ueber Yahoo fortgeschrieben.
+        db.executescript("""
+        CREATE TABLE IF NOT EXISTS snapshots (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            name             TEXT,
+            source_portfolio TEXT,
+            created_at       TEXT DEFAULT (datetime('now')),
+            updated_at       TEXT
+        );
+        CREATE TABLE IF NOT EXISTS snapshot_positions (
+            snapshot_id          INTEGER,
+            ticker               TEXT,
+            name                 TEXT,
+            isin                 TEXT,
+            quantity             REAL,
+            purchase_price       REAL,
+            price_at_snapshot    REAL,
+            current_price        REAL,
+            price_ok             INTEGER DEFAULT 0,
+            yahoo_symbol         TEXT DEFAULT '',
+            stock_type           TEXT DEFAULT '',
+            sector               TEXT DEFAULT '',
+            country              TEXT DEFAULT '',
+            notes                TEXT DEFAULT '',
+            report_url           TEXT DEFAULT '',
+            position_size        TEXT DEFAULT '',
+            typical_drawdown     REAL,
+            currency_override    TEXT DEFAULT '',
+            buy_target           REAL,
+            sell_target          REAL,
+            target_currency      TEXT DEFAULT '',
+            avg_drawdown_pct     REAL,
+            max_drawdown_pct     REAL,
+            current_drawdown_pct REAL,
+            return_15y_pct       REAL,
+            return_15y_cagr      REAL,
+            PRIMARY KEY (snapshot_id, ticker)
+        );
+        CREATE TABLE IF NOT EXISTS snapshot_value_history (
+            snapshot_id INTEGER,
+            date        TEXT,
+            value_eur   REAL,
+            PRIMARY KEY (snapshot_id, date)
+        );
+        """)
+
         # watchlist: return_15y_pct nachrüsten (bestehende DBs)
         try:
             db.execute("ALTER TABLE watchlist ADD COLUMN return_15y_pct REAL")
@@ -512,6 +559,58 @@ def api_annotations(ticker: str):
             (data.get("target_currency") or "").upper(),
         ))
     return jsonify({"ok": True})
+
+
+@app.route("/api/snapshots", methods=["GET", "POST"])
+def api_snapshots():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        portfolio = (data.get("portfolio") or "").strip()
+        from sync import create_snapshot, update_snapshots
+        snap_id = create_snapshot(portfolio, (data.get("name") or "").strip())
+        if not snap_id:
+            return jsonify({"ok": False, "error": "Keine Positionen in diesem Portfolio"}), 400
+        # Kurse und Verlauf gleich im Hintergrund holen
+        threading.Thread(target=update_snapshots, daemon=True).start()
+        return jsonify({"ok": True, "id": snap_id})
+
+    # GET: Snapshot-Positionen in Holdings-Form, damit das Frontend sie wie ein Portfolio rendert
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT p.*, s.name AS snapshot_name, s.created_at AS snapshot_created_at
+            FROM snapshot_positions p JOIN snapshots s ON s.id = p.snapshot_id
+            ORDER BY s.id, p.ticker
+        """).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        qty = d["quantity"] or 0
+        cp = d["current_price"] or 0
+        d["portfolio_name"] = d.pop("snapshot_name")
+        d["is_snapshot"] = True
+        d["current_value"] = qty * cp
+        d["value_at_snapshot"] = qty * (d["price_at_snapshot"] or 0)
+        d["total_return_pct"] = (cp / d["purchase_price"] - 1) * 100 if d["purchase_price"] else None
+        d["change_since_snapshot_pct"] = (cp / d["price_at_snapshot"] - 1) * 100 if d["price_at_snapshot"] else None
+        out.append(d)
+    return jsonify(out)
+
+
+@app.route("/api/snapshots/<int:snap_id>", methods=["DELETE"])
+def api_snapshot_delete(snap_id: int):
+    with get_db() as db:
+        for table in ("snapshot_positions", "snapshot_value_history"):
+            db.execute(f"DELETE FROM {table} WHERE snapshot_id=?", (snap_id,))
+        db.execute("DELETE FROM snapshots WHERE id=?", (snap_id,))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/snapshots/<int:snap_id>/history")
+def api_snapshot_history(snap_id: int):
+    with get_db() as db:
+        rows = db.execute("SELECT date, value_eur FROM snapshot_value_history WHERE snapshot_id=? ORDER BY date",
+                          (snap_id,)).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/sync", methods=["POST"])

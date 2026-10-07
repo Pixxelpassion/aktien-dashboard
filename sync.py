@@ -727,6 +727,152 @@ def send_discord_message(webhook_url: str, title: str, description: str, color: 
 # Main Sync
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Snapshots: Portfolio einfrieren und hypothetisch weiterverfolgen
+# ---------------------------------------------------------------------------
+
+def _yahoo_daily(symbol: str, start: str) -> tuple[list[dict], str]:
+    """Tagesschlusskurse ab `start` (YYYY-MM-DD) in Yahoo-Waehrung; Pence -> GBP wie bei _yahoo_history."""
+    try:
+        t = yf.Ticker(symbol)
+        raw_currency = ""
+        try:
+            c = t.fast_info.get("currency")
+            if c:
+                raw_currency = str(c)
+        except Exception:
+            pass
+        hist = t.history(start=start, interval="1d", auto_adjust=False)
+        if hist.empty:
+            return [], raw_currency
+        is_pence = raw_currency == "GBp" or raw_currency.upper() == "GBX"
+        divisor = 100.0 if is_pence else 1.0
+        prices = [{"date": str(idx.date()), "price": float(row["Close"]) / divisor}
+                  for idx, row in hist.iterrows() if row["Close"] == row["Close"]]
+        return prices, ("GBP" if is_pence else raw_currency)
+    except Exception as e:
+        print(f"[Snapshot] Yahoo-Fehler {symbol}: {e}")
+        return [], ""
+
+
+def create_snapshot(portfolio_name: str, name: str = "") -> int | None:
+    """Aktuelle Positionen eines Portfolios samt Annotationen einfrieren. Liefert die Snapshot-ID."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT h.ticker, h.name, h.isin, h.quantity, h.purchase_price, h.current_price,
+                   a.stock_type, a.sector, a.country, a.notes, a.report_url, a.position_size,
+                   a.typical_drawdown, a.currency_override, a.buy_target, a.sell_target,
+                   a.target_currency, a.yahoo_symbol,
+                   m.avg_drawdown_pct, m.max_drawdown_pct, m.current_drawdown_pct,
+                   m.return_15y_pct, m.return_15y_cagr
+            FROM holdings h
+            LEFT JOIN annotations a ON a.ticker = h.ticker
+            LEFT JOIN metrics     m ON m.ticker = h.ticker
+            WHERE h.portfolio_name = ? AND h.quantity > 0
+        """, (portfolio_name,)).fetchall()
+        if not rows:
+            return None
+        if not name:
+            name = f"📸 {portfolio_name} · {datetime.date.today().strftime('%d.%m.%Y')}"
+        snap_id = db.execute("INSERT INTO snapshots (name, source_portfolio) VALUES (?, ?)",
+                             (name, portfolio_name)).lastrowid
+        value = 0.0
+        for r in rows:
+            symbol = yahoo_symbol_for(r["ticker"], r["isin"] or "", r["yahoo_symbol"] or "")
+            db.execute("""
+                INSERT INTO snapshot_positions
+                    (snapshot_id, ticker, name, isin, quantity, purchase_price, price_at_snapshot,
+                     current_price, yahoo_symbol, stock_type, sector, country, notes, report_url,
+                     position_size, typical_drawdown, currency_override, buy_target, sell_target,
+                     target_currency, avg_drawdown_pct, max_drawdown_pct, current_drawdown_pct,
+                     return_15y_pct, return_15y_cagr)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (snap_id, r["ticker"], r["name"], r["isin"], r["quantity"], r["purchase_price"],
+                  r["current_price"], r["current_price"], symbol,
+                  r["stock_type"] or "", r["sector"] or "", r["country"] or "", r["notes"] or "",
+                  r["report_url"] or "", r["position_size"] or "", r["typical_drawdown"],
+                  r["currency_override"] or "", r["buy_target"], r["sell_target"],
+                  r["target_currency"] or "", r["avg_drawdown_pct"], r["max_drawdown_pct"],
+                  r["current_drawdown_pct"], r["return_15y_pct"], r["return_15y_cagr"]))
+            value += (r["quantity"] or 0) * (r["current_price"] or 0)
+        db.execute("INSERT INTO snapshot_value_history (snapshot_id, date, value_eur) VALUES (?, ?, ?)",
+                   (snap_id, datetime.date.today().isoformat(), value))
+    print(f"[Snapshot] '{name}' mit {len(rows)} Positionen angelegt (Wert {value:.2f} EUR).")
+    return snap_id
+
+
+def update_snapshots():
+    """Kurse aller Snapshots ueber Yahoo fortschreiben und Wertverlauf seit Stichtag neu berechnen.
+    Ohne Yahoo-Quelle bleibt eine Position auf dem Kurs vom Stichtag stehen (price_ok = 0).
+    Umrechnung nach EUR mit dem aktuellen Wechselkurs (Naeherung wie beim Historien-Chart)."""
+    with get_db() as db:
+        snaps = db.execute("SELECT id, name, created_at FROM snapshots").fetchall()
+        rates = {r["currency"]: r["rate"] for r in
+                 db.execute("SELECT currency, rate FROM exchange_rates").fetchall()}
+    rates["EUR"] = 1.0
+
+    for snap in snaps:
+        start = snap["created_at"][:10]
+        with get_db() as db:
+            positions = db.execute("SELECT * FROM snapshot_positions WHERE snapshot_id=?",
+                                   (snap["id"],)).fetchall()
+        print(f"[Snapshot] Aktualisiere '{snap['name']}' ({len(positions)} Positionen)...")
+
+        series = []  # (Menge, Kurs am Stichtag in EUR, {Datum: Kurs in EUR} oder None)
+        for p in positions:
+            symbol = p["yahoo_symbol"] or ""
+            daily, curr = _yahoo_daily(symbol, start) if symbol else ([], "")
+            rate = rates.get(curr) if curr else None
+            if daily and rate:
+                by_date = {d["date"]: d["price"] / rate for d in daily}
+                monthly, _ = fetch_price_history(symbol, years=16)
+                if monthly and is_crypto(p["isin"]):
+                    monthly = cut_spliced_history(monthly)
+                dd = calc_drawdown_metrics(monthly) if monthly else {}
+                ret = calc_15y_return(monthly) if monthly else {}
+                with get_db() as db:
+                    db.execute("""
+                        UPDATE snapshot_positions SET current_price=?, price_ok=1,
+                            avg_drawdown_pct=COALESCE(?, avg_drawdown_pct),
+                            max_drawdown_pct=COALESCE(?, max_drawdown_pct),
+                            current_drawdown_pct=COALESCE(?, current_drawdown_pct),
+                            return_15y_pct=COALESCE(?, return_15y_pct),
+                            return_15y_cagr=COALESCE(?, return_15y_cagr)
+                        WHERE snapshot_id=? AND ticker=?
+                    """, (daily[-1]["price"] / rate, dd.get("avg_drawdown_pct"), dd.get("max_drawdown_pct"),
+                          dd.get("current_drawdown_pct"), ret.get("return_15y_pct"),
+                          ret.get("return_15y_cagr"), snap["id"], p["ticker"]))
+                series.append((p["quantity"] or 0, p["price_at_snapshot"] or 0, by_date))
+            else:
+                if symbol:
+                    print(f"[Snapshot]   {p['ticker']}: keine Kurse ({symbol}) — bleibt auf Stichtagskurs")
+                with get_db() as db:
+                    db.execute("UPDATE snapshot_positions SET current_price=price_at_snapshot, price_ok=0 "
+                               "WHERE snapshot_id=? AND ticker=?", (snap["id"], p["ticker"]))
+                series.append((p["quantity"] or 0, p["price_at_snapshot"] or 0, None))
+
+        # Wertverlauf: je Tag Summe aus Menge x Kurs, Luecken (Wochenende bei Aktien) mit
+        # dem letzten bekannten Kurs gefuellt, vor dem ersten Kurs der Stichtagskurs
+        dates = sorted({d for _, _, by_date in series if by_date for d in by_date})
+        last = [base for _, base, _ in series]
+        history = []
+        for d in dates:
+            total = 0.0
+            for i, (qty, _, by_date) in enumerate(series):
+                if by_date and d in by_date:
+                    last[i] = by_date[d]
+                total += qty * last[i]
+            history.append((d, total))
+        with get_db() as db:
+            if history:
+                db.execute("DELETE FROM snapshot_value_history WHERE snapshot_id=?", (snap["id"],))
+                db.executemany("INSERT INTO snapshot_value_history (snapshot_id, date, value_eur) VALUES (?,?,?)",
+                               [(snap["id"], d, v) for d, v in history])
+            db.execute("UPDATE snapshots SET updated_at=datetime('now') WHERE id=?", (snap["id"],))
+    if snaps:
+        print(f"[Snapshot] ✓ {len(snaps)} Snapshot(s) aktualisiert")
+
+
 def _normalize_holding(h: dict) -> dict | None:
     """Normalize Parqet API response into a flat dict."""
 
@@ -865,6 +1011,12 @@ def run_sync():
     print(f"\n{'='*50}")
     print(f"[Sync] Start: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*50}")
+
+    # Snapshots zuerst: haengen nicht an Parqet und sollen auch laufen, wenn der Token klemmt
+    try:
+        update_snapshots()
+    except Exception as e:
+        print(f"[Snapshot] Fehler beim Aktualisieren: {e}")
 
     cfg = load_config()
     cfg = refresh_token_if_needed(cfg)

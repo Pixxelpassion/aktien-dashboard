@@ -71,6 +71,16 @@ das Bash-Tool liefert dabei faelschlich Exit 128. Zum Pushen PowerShell nutzen.
   aktueller Wechselkurs), kein echter Kontoverlauf. Das ungenutzte Parqet-Tool `parqet_get_performance`
   waere der Weg zur echten Historie.
 - Portfolio-Namen enthalten Emojis, teils mit Zero-Width-Space (z. B. "📈​ Trading").
+- Krypto = Position ohne ISIN (Parqet liefert nur das Kuerzel, `is_crypto`). Waehrung immer USD, Marken in
+  USD gespeichert (`annotations.target_currency`), Aktien-Marken weiter in EUR (target_currency leer).
+  Kennzahlen ueber Yahoo `<KUERZEL>-USD` (nacktes "LINK"/"BTC" sind bei Yahoo Aktien/ETFs!), Sonderfaelle in
+  `CRYPTO_YAHOO_SYMBOLS`, manuell pro Position ueber `annotations.yahoo_symbol` ("-" = keine Quelle).
+  Yahoo stueckelt manche Krypto-Historien (TIA-USD), daher `cut_spliced_history`.
+- Kurse unter 1 werden mit 4 gueltigen Ziffern angezeigt (`fmtPrice` / `fmt_price`), nie mit `fmt()`.
+- Snapshots (`snapshots`, `snapshot_positions`, `snapshot_value_history`): eingefrorene Portfolios, die der
+  Sync nie loescht; `update_snapshots()` laeuft am Anfang von `run_sync` (auch ohne Parqet-Token).
+  Keine Alarme, nicht in "Alle". Snapshot IMMER auf dem Server anlegen, BEVOR ein Portfolio in Parqet
+  geloescht wird — sonst entfernt der Cleanup in `run_sync` die Positionen.
 
 ## Offen / ungeprueft
 - Ob `DASHBOARD_USER`/`DASHBOARD_PASSWORD_HASH` auf dem Server inzwischen gesetzt sind (Code ist deployed;
